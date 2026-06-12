@@ -17,10 +17,9 @@ import ProgressRing from '../components/ProgressRing'
 import { recipes, dailyTips } from '../data/mockData'
 import { hebrewToday, todayISO, todayKey, last7Days, DAY_LETTERS_HE } from '../utils/dates'
 
-const WATER_TARGET_ML = 2500
-
 export default function Home() {
   const { user, profile } = useAuth()
+  const waterTargetMl = +profile?.water_target_ml || 2500
   const [todayLogs, setTodayLogs] = useState([])
   const [weekLogs, setWeekLogs] = useState([])
   const [todayWorkout, setTodayWorkout] = useState(null)
@@ -208,14 +207,14 @@ export default function Home() {
             מעקב מים
           </h2>
           <span className="label-muted">
-            {(waterMl / 1000).toFixed(2)} / {WATER_TARGET_ML / 1000} ליטר
+            {(waterMl / 1000).toFixed(2)} / {(waterTargetMl / 1000).toFixed(2)} ליטר
           </span>
         </div>
         <div className="h-3 rounded-full overflow-hidden mb-3" style={{ background: 'var(--bg-card-2)' }}>
           <div
             className="h-full rounded-full transition-all duration-500"
             style={{
-              width: `${Math.min((waterMl / WATER_TARGET_ML) * 100, 100)}%`,
+              width: `${Math.min((waterMl / waterTargetMl) * 100, 100)}%`,
               background: 'var(--lime)',
               boxShadow: '0 0 12px rgba(200,240,0,0.5)',
             }}

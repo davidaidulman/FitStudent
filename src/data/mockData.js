@@ -203,12 +203,28 @@ export const recipes = [
 ]
 
 // ─────────────────────────────────────────────────────────────
-// 3 weekly workout-plan templates (beginner / intermediate / advanced)
-// Each: ordered list of TRAINING days (rest days filled by the generator
-// according to workouts_per_week). day slots are assigned by the generator.
+// Workout disciplines — the user picks one in onboarding; it drives
+// both the generated weekly plan (planTemplates) and the exercise library.
 // ─────────────────────────────────────────────────────────────
 
-export const planTemplates = {
+export const DISCIPLINES = [
+  { key: 'gym', label: 'חדר כושר', emoji: '🏋️', desc: 'אימוני כוח והתנגדות' },
+  { key: 'yoga', label: 'יוגה', emoji: '🧘', desc: 'גמישות, נשימה ושיווי משקל' },
+  { key: 'pilates', label: 'פילאטיס', emoji: '🤸', desc: 'ליבה, יציבה ושליטה' },
+  { key: 'crossfit', label: 'קרוספיט', emoji: '🔥', desc: 'אימון פונקציונלי עצים' },
+]
+
+export const DISCIPLINE_LABELS = Object.fromEntries(DISCIPLINES.map((d) => [d.key, d.label]))
+export const DISCIPLINE_EMOJI = Object.fromEntries(DISCIPLINES.map((d) => [d.key, d.emoji]))
+
+// ─────────────────────────────────────────────────────────────
+// Weekly workout-plan templates, keyed by discipline → experience level.
+// Each level is an ordered list of TRAINING days (rest days are filled by
+// the generator according to workouts_per_week). For non-gym disciplines
+// "reps" often means seconds/breaths — see each exercise description.
+// ─────────────────────────────────────────────────────────────
+
+const GYM = {
   beginner: [
     {
       workout_name: 'גוף מלא A',
@@ -346,8 +362,204 @@ export const planTemplates = {
   ],
 }
 
+// Yoga — "reps" = שניות החזקה / נשימות. weight always 0.
+const YOGA = {
+  beginner: [
+    {
+      workout_name: 'זרימת בוקר עדינה',
+      muscle_groups: 'גמישות, נשימה',
+      exercises: [
+        { name: 'נשימת בטן (פראניאמה)', sets: 1, reps: 120, weight_kg: 0, description: '2 דקות נשימה איטית להרגעת מערכת העצבים' },
+        { name: 'תנוחת החתול-פרה', sets: 2, reps: 60, weight_kg: 0, description: 'מעבר איטי בין קימור לקמירה בקצב הנשימה' },
+        { name: 'תנוחת הכלב מביט מטה', sets: 3, reps: 45, weight_kg: 0, description: 'עקבים לכיוון הרצפה, גב ארוך וישר' },
+        { name: 'תנוחת הילד', sets: 2, reps: 60, weight_kg: 0, description: 'מנוחה ומתיחת גב תחתון' },
+      ],
+    },
+    {
+      workout_name: 'פתיחת ירכיים',
+      muscle_groups: 'ירכיים, גב תחתון',
+      exercises: [
+        { name: 'תנוחת היונה', sets: 2, reps: 45, weight_kg: 0, description: '45 שניות לכל צד, נשימה עמוקה' },
+        { name: 'תנוחת הפרפר בישיבה', sets: 3, reps: 40, weight_kg: 0, description: 'ברכיים יורדות לצדדים בעדינות' },
+        { name: 'כיפוף קדמי בישיבה', sets: 3, reps: 40, weight_kg: 0, description: 'גב ארוך, מתיחה בירך אחורית' },
+        { name: 'שאוואסנה (מנוחה)', sets: 1, reps: 120, weight_kg: 0, description: 'הרפיה מלאה בסיום' },
+      ],
+    },
+  ],
+  intermediate: [
+    {
+      workout_name: 'ויניאסה זורמת',
+      muscle_groups: 'גוף מלא, ליבה',
+      exercises: [
+        { name: 'ברכת השמש A', sets: 4, reps: 60, weight_kg: 0, description: 'סבב מלא מסונכרן עם הנשימה' },
+        { name: 'תנוחת הלוחם II', sets: 3, reps: 45, weight_kg: 0, description: '45 שניות לכל צד, ירך פתוחה' },
+        { name: 'תנוחת המשולש', sets: 2, reps: 40, weight_kg: 0, description: 'צד הגוף ארוך, מבט לאצבעות' },
+        { name: 'תנוחת העץ (שיווי משקל)', sets: 2, reps: 40, weight_kg: 0, description: '40 שניות לכל רגל' },
+        { name: 'שאוואסנה', sets: 1, reps: 150, weight_kg: 0, description: 'הרפיה מודרכת' },
+      ],
+    },
+    {
+      workout_name: 'כוח וליבה',
+      muscle_groups: 'ליבה, זרועות',
+      exercises: [
+        { name: 'תנוחת הסירה', sets: 3, reps: 30, weight_kg: 0, description: 'ליבה אסופה, רגליים מורמות' },
+        { name: 'פלאנק יוגה (צד)', sets: 3, reps: 30, weight_kg: 0, description: '30 שניות לכל צד' },
+        { name: 'תנוחת הכיסא', sets: 3, reps: 45, weight_kg: 0, description: 'ירכיים אחורה, גב ישר' },
+        { name: 'גשר / רותם', sets: 3, reps: 40, weight_kg: 0, description: 'הרמת אגן עם כיווץ ישבן' },
+      ],
+    },
+  ],
+  advanced: [
+    {
+      workout_name: 'ויניאסה מתקדמת',
+      muscle_groups: 'גוף מלא, איזון',
+      exercises: [
+        { name: 'ברכת השמש B', sets: 5, reps: 60, weight_kg: 0, description: 'סבב מלא בקצב נמרץ' },
+        { name: 'עורב (Bakasana)', sets: 3, reps: 25, weight_kg: 0, description: 'איזון ידיים — התקדם בהדרגה' },
+        { name: 'תנוחת הלוחם III', sets: 3, reps: 30, weight_kg: 0, description: 'שיווי משקל על רגל אחת' },
+        { name: 'גלגל (Urdhva Dhanurasana)', sets: 3, reps: 30, weight_kg: 0, description: 'פתיחת חזה עמוקה' },
+        { name: 'שאוואסנה', sets: 1, reps: 180, weight_kg: 0, description: 'הרפיה ארוכה' },
+      ],
+    },
+  ],
+}
+
+// Pilates — "reps" = חזרות מבוקרות או שניות החזקה. weight 0.
+const PILATES = {
+  beginner: [
+    {
+      workout_name: 'יסודות מאט פילאטיס',
+      muscle_groups: 'ליבה, יציבה',
+      exercises: [
+        { name: 'נשימת פילאטיס + הפעלת ליבה', sets: 2, reps: 10, weight_kg: 0, description: 'נשיפה תוך משיכת טבור פנימה' },
+        { name: 'מאה (The Hundred)', sets: 1, reps: 100, weight_kg: 0, description: '100 נקישות ידיים, ליבה יציבה' },
+        { name: 'גלגול אגן (Pelvic Curl)', sets: 3, reps: 10, weight_kg: 0, description: 'חוליה-חוליה מעלה ומטה' },
+        { name: 'מתיחת רגל בודדת', sets: 3, reps: 12, weight_kg: 0, description: '12 לכל רגל, ליבה לא זזה' },
+      ],
+    },
+    {
+      workout_name: 'ליבה ויציבה',
+      muscle_groups: 'ליבה, גב',
+      exercises: [
+        { name: 'גלגול כדור (Rolling)', sets: 2, reps: 10, weight_kg: 0, description: 'שליטה בגלגול ללא תנופה' },
+        { name: 'מסור (Saw)', sets: 2, reps: 8, weight_kg: 0, description: 'סיבוב גו עם מתיחה' },
+        { name: 'שחייה (Swimming)', sets: 3, reps: 20, weight_kg: 0, description: 'בשכיבת בטן, גפיים נגדיות' },
+        { name: 'פלאנק עם ירידת ברכיים', sets: 3, reps: 30, weight_kg: 0, description: '30 שניות יציבות' },
+      ],
+    },
+  ],
+  intermediate: [
+    {
+      workout_name: 'זרימת ליבה ביניים',
+      muscle_groups: 'ליבה, ירך',
+      exercises: [
+        { name: 'מאה מתקדם', sets: 1, reps: 100, weight_kg: 0, description: 'רגליים בזווית 45°' },
+        { name: 'מתיחת שתי רגליים', sets: 3, reps: 12, weight_kg: 0, description: 'פתיחה וסגירה בשליטה' },
+        { name: 'מספריים (Scissors)', sets: 3, reps: 16, weight_kg: 0, description: 'החלפת רגליים מבוקרת' },
+        { name: 'טיזר (Teaser) מותאם', sets: 3, reps: 8, weight_kg: 0, description: 'הרמת גו ורגליים ל-V' },
+        { name: 'גלגול אגן עם הרמת רגל', sets: 2, reps: 10, weight_kg: 0, description: 'יציבות אגן' },
+      ],
+    },
+    {
+      workout_name: 'גב וישבן',
+      muscle_groups: 'גב, ישבן',
+      exercises: [
+        { name: 'בעיטות ישבן בשכיבה', sets: 3, reps: 12, weight_kg: 0, description: 'מבלי לקמר גב תחתון' },
+        { name: 'הקפות רגל בצד', sets: 3, reps: 12, weight_kg: 0, description: '12 לכל צד' },
+        { name: 'שחייה מתקדמת', sets: 3, reps: 30, weight_kg: 0, description: 'קצב יציב' },
+        { name: 'פלאנק מלא', sets: 3, reps: 40, weight_kg: 0, description: '40 שניות יציבות מלאה' },
+      ],
+    },
+  ],
+  advanced: [
+    {
+      workout_name: 'מאט מתקדם',
+      muscle_groups: 'גוף מלא, ליבה',
+      exercises: [
+        { name: 'טיזר מלא', sets: 3, reps: 8, weight_kg: 0, description: 'שליטה מלאה בעלייה וירידה' },
+        { name: 'בומרנג (Boomerang)', sets: 2, reps: 6, weight_kg: 0, description: 'רצף מורכב של גלגול וסיבוב' },
+        { name: 'קורקסקרו (Corkscrew)', sets: 3, reps: 8, weight_kg: 0, description: 'סיבוב רגליים סביב ציר' },
+        { name: 'שכיבת שכל (Control Balance)', sets: 2, reps: 8, weight_kg: 0, description: 'איזון על שכמות' },
+        { name: 'פלאנק עם ניתוק רגל', sets: 3, reps: 30, weight_kg: 0, description: 'הרמת רגל לסירוגין' },
+      ],
+    },
+  ],
+}
+
+// Crossfit — WOD-style. "reps" = חזרות לסבב; משקלים מוצעים בק"ג.
+const CROSSFIT = {
+  beginner: [
+    {
+      workout_name: 'WOD מבוא — AMRAP 12',
+      muscle_groups: 'גוף מלא, סיבולת',
+      exercises: [
+        { name: 'אוויר סקוואט', sets: 3, reps: 15, weight_kg: 0, description: 'AMRAP — כמה סבבים ב-12 דקות' },
+        { name: 'שכיבות סמיכה (על ברכיים אופציה)', sets: 3, reps: 10, weight_kg: 0, description: 'טכניקה לפני מהירות' },
+        { name: 'קפיצות כוכב / ג׳אמפינג ג׳ק', sets: 3, reps: 20, weight_kg: 0, description: 'העלאת דופק' },
+        { name: 'פלאנק', sets: 3, reps: 30, weight_kg: 0, description: '30 שניות בין סבבים' },
+      ],
+    },
+    {
+      workout_name: 'כוח בסיסי + מטקון',
+      muscle_groups: 'רגליים, ליבה',
+      exercises: [
+        { name: 'דדליפט קל (טכניקה)', sets: 4, reps: 8, weight_kg: 40, description: 'גב ניטרלי, דגש על תבנית' },
+        { name: 'קטלבל סווינג', sets: 4, reps: 15, weight_kg: 12, description: 'כוח מהירך, לא מהכתף' },
+        { name: 'בקס סטפ-אפ', sets: 3, reps: 12, weight_kg: 0, description: '12 לכל רגל' },
+        { name: 'סיט-אפים', sets: 3, reps: 15, weight_kg: 0, description: 'קצב יציב' },
+      ],
+    },
+  ],
+  intermediate: [
+    {
+      workout_name: '"Cindy" — AMRAP 20',
+      muscle_groups: 'גוף מלא, סיבולת',
+      exercises: [
+        { name: 'מתח', sets: 1, reps: 5, weight_kg: 0, description: '5 בכל סבב — כמה סבבים ב-20 דקות' },
+        { name: 'שכיבות סמיכה', sets: 1, reps: 10, weight_kg: 0, description: '10 בכל סבב' },
+        { name: 'אוויר סקוואט', sets: 1, reps: 15, weight_kg: 0, description: '15 בכל סבב' },
+        { name: 'דאבל-אנדר (קפיצה בחבל)', sets: 3, reps: 30, weight_kg: 0, description: 'גמר — סיבולת' },
+      ],
+    },
+    {
+      workout_name: 'אולימפי + מטקון',
+      muscle_groups: 'גוף מלא, כוח-מתפרץ',
+      exercises: [
+        { name: 'פאוור קלין', sets: 5, reps: 3, weight_kg: 50, description: 'משיכה מתפרצת, קבלה בכריעה' },
+        { name: 'תרוסטרים', sets: 4, reps: 10, weight_kg: 35, description: 'סקוואT ללחיצה מעל הראש' },
+        { name: 'בארפי בוקס ג׳אמפ', sets: 4, reps: 10, weight_kg: 0, description: 'קצב גבוה' },
+        { name: 'וול-בול', sets: 4, reps: 15, weight_kg: 9, description: 'כדור 9 ק"ג למטרה' },
+      ],
+    },
+  ],
+  advanced: [
+    {
+      workout_name: '"Fran" — 21-15-9',
+      muscle_groups: 'גוף מלא, עצימות',
+      exercises: [
+        { name: 'תרוסטרים', sets: 1, reps: 21, weight_kg: 43, description: '21-15-9 לזמן, מוט 43 ק"ג' },
+        { name: 'מתח לחזה (C2B)', sets: 1, reps: 21, weight_kg: 0, description: '21-15-9 לסירוגין עם התרוסטר' },
+        { name: 'מאסל-אפ (אופציונלי)', sets: 3, reps: 5, weight_kg: 0, description: 'מיומנות מתקדמת' },
+        { name: 'דאבל-אנדר', sets: 3, reps: 50, weight_kg: 0, description: 'סיבולת גמר' },
+      ],
+    },
+    {
+      workout_name: 'כוח כבד + EMOM',
+      muscle_groups: 'גוף מלא, כוח',
+      exercises: [
+        { name: 'בק סקוואט כבד', sets: 5, reps: 3, weight_kg: 90, description: '5×3 כוח, מנוחה מלאה' },
+        { name: 'דדליפט', sets: 1, reps: 5, weight_kg: 100, description: 'EMOM — 5 כל דקה למשך 8 דקות' },
+        { name: 'האנג פאוור סנאץ׳', sets: 6, reps: 2, weight_kg: 45, description: 'מהירות וטכניקה' },
+        { name: 'בארפי על מוט', sets: 4, reps: 12, weight_kg: 0, description: 'גמר מטבולי' },
+      ],
+    },
+  ],
+}
+
+export const planTemplates = { gym: GYM, yoga: YOGA, pilates: PILATES, crossfit: CROSSFIT }
+
 // ─────────────────────────────────────────────────────────────
-// 20-exercise library
+// Exercise / movement library — tagged by discipline
 // ─────────────────────────────────────────────────────────────
 
 export const MUSCLE_GROUPS = [
@@ -380,6 +592,42 @@ export const exercises = [
   { name: 'פשיטת מרפקים בפולי', muscle_group: 'arms', sets_recommendation: '3×12', description: 'בידוד ליד האחורית. דחוף את החבל למטה עד יישור מלא של המרפק.' },
   { name: 'פלאנק', muscle_group: 'core', sets_recommendation: '3×45 שנ׳', description: 'יציבות ליבה. גוף בקו ישר מהראש לעקבים, בטן מכווצת.' },
   { name: 'הרמות רגליים בתליה', muscle_group: 'core', sets_recommendation: '3×12', description: 'בטן תחתונה. הרם רגליים ישרות עד 90° ללא נדנוד.' },
+]
+
+// Non-gym movements for the library, grouped by discipline.
+// muscle_group here stores the discipline key so the existing filter UI works.
+export const disciplineMovements = [
+  // Yoga
+  { name: 'תנוחת הכלב מביט מטה', muscle_group: 'yoga', sets_recommendation: '3×45 שנ׳', description: 'מתיחת גב וגיד הברך. עקבים לכיוון הרצפה, גב ארוך.' },
+  { name: 'תנוחת הלוחם II', muscle_group: 'yoga', sets_recommendation: '45 שנ׳ לכל צד', description: 'חיזוק רגליים ופתיחת ירכיים. ברך קדמית מעל הקרסול.' },
+  { name: 'תנוחת העץ', muscle_group: 'yoga', sets_recommendation: '40 שנ׳ לכל רגל', description: 'שיווי משקל וריכוז. כף רגל על ירך פנימית, לא על הברך.' },
+  { name: 'ברכת השמש A', muscle_group: 'yoga', sets_recommendation: '4 סבבים', description: 'רצף זורם המסנכרן תנועה ונשימה — חימום מצוין.' },
+  { name: 'שאוואסנה', muscle_group: 'yoga', sets_recommendation: '2–3 דק׳', description: 'תנוחת מנוחה לסיום. הרפיה מלאה של הגוף.' },
+  // Pilates
+  { name: 'מאה (The Hundred)', muscle_group: 'pilates', sets_recommendation: '100 נקישות', description: 'הפעלת ליבה ונשימה. רגליים בזווית, גב צמוד למזרן.' },
+  { name: 'גלגול אגן (Pelvic Curl)', muscle_group: 'pilates', sets_recommendation: '3×10', description: 'ניוד עמוד שדרה חוליה-חוליה וחיזוק ישבן.' },
+  { name: 'טיזר (Teaser)', muscle_group: 'pilates', sets_recommendation: '3×8', description: 'שליטת ליבה מתקדמת — גו ורגליים לצורת V.' },
+  { name: 'שחייה (Swimming)', muscle_group: 'pilates', sets_recommendation: '3×20', description: 'חיזוק שרשרת אחורית בשכיבת בטן.' },
+  // Crossfit
+  { name: 'תרוסטרים', muscle_group: 'crossfit', sets_recommendation: '4×10', description: 'סקוואט קדמי ולחיצה מעל הראש בתנועה אחת רציפה.' },
+  { name: 'קטלבל סווינג', muscle_group: 'crossfit', sets_recommendation: '4×15', description: 'כוח מתפרץ מהירך. הקטלבל לגובה הכתף, גב ניטרלי.' },
+  { name: 'בארפי', muscle_group: 'crossfit', sets_recommendation: '4×10', description: 'תרגיל גוף-מלא: ירידה, שכיבת סמיכה, קפיצה מעלה.' },
+  { name: 'דאבל-אנדר', muscle_group: 'crossfit', sets_recommendation: '3×30', description: 'קפיצה בחבל עם 2 סיבובים לכל קפיצה — סיבולת ותיאום.' },
+  { name: 'וול-בול', muscle_group: 'crossfit', sets_recommendation: '4×15', description: 'סקוואט עם זריקת כדור כוח למטרה גבוהה.' },
+]
+
+// Quick-add common foods (per portion) — one-tap diary logging
+export const COMMON_FOODS = [
+  { name: 'ביצה קשה', emoji: '🥚', portion: 'יחידה', calories: 78, protein_g: 6, carbs_g: 1, fat_g: 5 },
+  { name: 'חזה עוף מבושל', emoji: '🍗', portion: '100 גרם', calories: 165, protein_g: 31, carbs_g: 0, fat_g: 4 },
+  { name: 'אורז לבן מבושל', emoji: '🍚', portion: 'כוס', calories: 205, protein_g: 4, carbs_g: 45, fat_g: 0 },
+  { name: 'שייק חלבון (סקופ)', emoji: '🥤', portion: 'מנה', calories: 120, protein_g: 24, carbs_g: 3, fat_g: 2 },
+  { name: 'יוגורט יווני 5%', emoji: '🥣', portion: 'גביע 200ג', calories: 130, protein_g: 18, carbs_g: 8, fat_g: 5 },
+  { name: 'בננה', emoji: '🍌', portion: 'בינונית', calories: 105, protein_g: 1, carbs_g: 27, fat_g: 0 },
+  { name: 'פרוסת לחם מלא', emoji: '🍞', portion: 'פרוסה', calories: 80, protein_g: 4, carbs_g: 14, fat_g: 1 },
+  { name: 'טונה במים', emoji: '🐟', portion: 'קופסה 140ג', calories: 130, protein_g: 29, carbs_g: 0, fat_g: 1 },
+  { name: 'תפוח', emoji: '🍎', portion: 'בינוני', calories: 95, protein_g: 0, carbs_g: 25, fat_g: 0 },
+  { name: 'חמאת בוטנים', emoji: '🥜', portion: 'כף', calories: 95, protein_g: 4, carbs_g: 3, fat_g: 8 },
 ]
 
 // ─────────────────────────────────────────────────────────────

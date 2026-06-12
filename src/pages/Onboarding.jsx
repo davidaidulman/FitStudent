@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { calcAllTargets, ACTIVITY_LEVELS } from '../utils/nutrition'
 import { generateWorkoutPlan } from '../services/ai'
+import { DISCIPLINES } from '../data/mockData'
 
 const BODY_TYPES = [
   { value: 'ecto', label: 'אקטומורף', emoji: '🪶', desc: 'רזה, מתקשה לעלות במשקל' },
@@ -52,6 +53,7 @@ export default function Onboarding() {
     activity_level: 'moderate',
     workouts_per_week: 3,
     experience: 'beginner',
+    workout_type: 'gym',
     dietary_restrictions: [],
     allergies: '',
   })
@@ -89,6 +91,7 @@ export default function Onboarding() {
         goal: form.goal,
         activity_level: form.activity_level,
         experience: form.experience,
+        workout_type: form.workout_type,
         dietary_restrictions: restrictions,
         ...numeric,
         ...targets,
@@ -108,6 +111,7 @@ export default function Onboarding() {
           workout_name: day.workout_name,
           muscle_groups: day.muscle_groups,
           exercises_json: day.exercises,
+          workout_type: day.workout_type,
         }))
       )
       if (planErr) throw planErr
@@ -242,6 +246,21 @@ export default function Onboarding() {
                     label={ex.label}
                     desc={ex.desc}
                     small
+                  />
+                ))}
+              </div>
+            </Field>
+            <Field label="סוג האימון המועדף (קובע את התוכנית שלך)">
+              <div className="grid grid-cols-2 gap-2">
+                {DISCIPLINES.map((d) => (
+                  <SelectCard
+                    key={d.key}
+                    active={form.workout_type === d.key}
+                    onClick={() => set('workout_type', d.key)}
+                    emoji={d.emoji}
+                    label={d.label}
+                    desc={d.desc}
+                    row
                   />
                 ))}
               </div>

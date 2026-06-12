@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Pencil, Save, LogOut, Trash2, Shield, Send } from 'lucide-react'
+import { Pencil, Save, LogOut, Trash2, Shield, Send, Droplets } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -304,8 +304,20 @@ function TargetCard({ value, label, color }) {
 
 function SettingsTab({ user, profile, signOut, navigate, showToast, refreshProfile }) {
   const [telegram, setTelegram] = useState(profile?.telegram_id || '')
+  const [waterL, setWaterL] = useState(((+profile?.water_target_ml || 2500) / 1000).toFixed(1))
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
+
+  async function saveWaterTarget() {
+    const ml = Math.round(parseFloat(waterL) * 1000)
+    if (!ml || ml < 500 || ml > 8000) return showToast('בחר יעד בין 0.5 ל-8 ליטר')
+    setBusy(true)
+    const { error } = await supabase.from('users').update({ water_target_ml: ml }).eq('id', user.id)
+    setBusy(false)
+    if (error) return showToast('שגיאה בשמירה 😕')
+    showToast('יעד המים עודכן 💧')
+    refreshProfile()
+  }
 
   async function saveTelegram() {
     setBusy(true)
@@ -333,6 +345,31 @@ function SettingsTab({ user, profile, signOut, navigate, showToast, refreshProfi
   return (
     <>
       <section className="card fade-up fade-up-2">
+        <h2 className="section-title mb-1 flex items-center gap-2">
+          <Droplets size={17} style={{ color: 'var(--teal)' }} />
+          יעד מים יומי
+        </h2>
+        <p className="label-muted text-sm mb-3">
+          כמה מים אתה רוצה לשתות ביום? (מומלץ 2–3 ליטר) — מתעדכן במסך הבית
+        </p>
+        <div className="flex gap-2">
+          <input
+            className="input-dark"
+            type="number"
+            step="0.1"
+            min="0.5"
+            max="8"
+            value={waterL}
+            onChange={(e) => setWaterL(e.target.value)}
+          />
+          <span className="label-muted shrink-0 self-center">ליטר</span>
+          <button className="btn-primary !w-auto px-5" onClick={saveWaterTarget} disabled={busy}>
+            שמור
+          </button>
+        </div>
+      </section>
+
+      <section className="card fade-up fade-up-3">
         <h2 className="section-title mb-1 flex items-center gap-2">
           <Send size={17} style={{ color: 'var(--blue)' }} />
           Telegram

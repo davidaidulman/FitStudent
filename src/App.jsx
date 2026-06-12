@@ -10,23 +10,25 @@ import Nutrition from './pages/Nutrition'
 import Workouts from './pages/Workouts'
 import Profile from './pages/Profile'
 
-// All data routes require a session; users without a profile go to onboarding
+// All data routes require a session; users without a profile go to onboarding.
+// profileChecked gates the profile-based redirect so a fresh login doesn't
+// bounce to /onboarding in the brief window before the profile fetch resolves.
 function Protected({ children, requireProfile = true }) {
-  const { session, profile, loading } = useAuth()
+  const { session, profile, loading, profileChecked } = useAuth()
   const location = useLocation()
 
-  if (loading) return <Splash />
+  if (loading || !profileChecked) return <Splash />
   if (!session) return <Navigate to="/login" replace />
   if (requireProfile && !profile && location.pathname !== '/onboarding')
     return <Navigate to="/onboarding" replace />
   return children
 }
 
-// Login/signup redirect away when already authenticated.
-// setupBusy holds the redirect while Demo Mode creates profile + plan.
+// Login/signup redirect away when already authenticated — but only once the
+// profile has been checked, so we route to the correct destination.
 function AuthRoute({ mode }) {
-  const { session, profile, loading, setupBusy } = useAuth()
-  if (loading || setupBusy) return <Splash />
+  const { session, profile, loading, profileChecked } = useAuth()
+  if (loading || (session && !profileChecked)) return <Splash />
   if (session) return <Navigate to={profile ? '/home' : '/onboarding'} replace />
   return <Auth mode={mode} />
 }

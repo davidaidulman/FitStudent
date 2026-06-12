@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS users (
   activity_level TEXT,
   workouts_per_week INTEGER,
   experience TEXT CHECK (experience IN ('beginner','intermediate','advanced')),
+  workout_type TEXT DEFAULT 'gym',  -- gym | yoga | pilates | crossfit (preferred discipline → drives the plan)
+  water_target_ml NUMERIC DEFAULT 2500,  -- configurable daily water goal
   dietary_restrictions JSONB DEFAULT '[]',
   bmr NUMERIC,
   tdee NUMERIC,
@@ -50,6 +52,7 @@ CREATE TABLE IF NOT EXISTS workout_log (
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   date DATE DEFAULT CURRENT_DATE,
   workout_name TEXT,
+  workout_type TEXT DEFAULT 'gym',  -- gym | yoga | pilates | crossfit
   exercises_json JSONB DEFAULT '[]',
   duration_min INTEGER,
   completed BOOLEAN DEFAULT FALSE,
@@ -61,6 +64,7 @@ CREATE TABLE IF NOT EXISTS workout_plan (
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   day_of_week TEXT,
   workout_name TEXT,
+  workout_type TEXT DEFAULT 'gym',  -- gym | yoga | pilates | crossfit
   muscle_groups TEXT,
   exercises_json JSONB DEFAULT '[]',
   generated_at TIMESTAMPTZ DEFAULT NOW()

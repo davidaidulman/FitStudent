@@ -1,35 +1,45 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Timer, CheckCircle2, Dumbbell, X } from 'lucide-react'
+import { Timer, CheckCircle2, Dumbbell, X, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
 import SubTabs from '../components/SubTabs'
 import Confetti from '../components/Confetti'
-import { exercises as exerciseLibrary, MUSCLE_GROUPS } from '../data/mockData'
+import {
+  exercises as exerciseLibrary,
+  disciplineMovements,
+  MUSCLE_GROUPS,
+  DISCIPLINES,
+  DISCIPLINE_LABELS,
+  DISCIPLINE_EMOJI,
+} from '../data/mockData'
+import { generateWorkoutPlan } from '../services/ai'
 import { todayKey, todayISO, DAY_KEYS, DAY_LETTERS_HE, hebrewShortDate } from '../utils/dates'
 
 const TABS = [
   { key: 'plan', label: 'התוכנית שלי' },
   { key: 'today', label: 'האימון של היום' },
+  { key: 'add', label: 'הוסף אימון' },
   { key: 'history', label: 'היסטוריה' },
-  { key: 'library', label: 'ספריית תרגילים' },
+  { key: 'library', label: 'ספרייה' },
 ]
 
 export default function Workouts() {
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') || 'plan'
-  const { user } = useAuth()
+  const { user, profile, refreshProfile } = useAuth()
   const { toast, showToast } = useToast()
   const [plan, setPlan] = useState([])
 
-  useEffect(() => {
+  async function loadPlan() {
     if (!user) return
-    supabase
-      .from('workout_plan')
-      .select('*')
-      .eq('user_id', user.id)
-      .then(({ data }) => setPlan(data || []))
+    const { data } = await supabase.from('workout_plan').select('*').eq('user_id', user.id)
+    setPlan(data || [])
+  }
+
+  useEffect(() => {
+    loadPlan()
   }, [user])
 
   return (
@@ -41,10 +51,13 @@ export default function Workouts() {
         <SubTabs tabs={TABS} active={tab} onChange={(t) => setParams({ tab: t })} />
       </div>
 
-      {tab === 'plan' && <PlanTab plan={plan} />}
+      {tab === 'plan' && (
+        <PlanTab plan={plan} user={user} profile={profile} reloadPlan={loadPlan} refreshProfile={refreshProfile} showToast={showToast} />
+      )}
       {tab === 'today' && <TodayTab plan={plan} user={user} showToast={showToast} />}
+      {tab === 'add' && <AddWorkoutTab user={user} profile={profile} showToast={showToast} onAdded={() => setParams({ tab: 'history' })} />}
       {tab === 'history' && <HistoryTab user={user} />}
-      {tab === 'library' && <LibraryTab />}
+      {tab === 'library' && <LibraryTab profile={profile} />}
 
       {toast}
     </div>
@@ -53,10 +66,61 @@ export default function Workouts() {
 
 /* ───────────────────────── Tab 1: My Plan ───────────────────────── */
 
-function PlanTab({ plan }) {
+function PlanTab({ plan, user, profile, reloadPlan, refreshProfile, showToast }) {
   const byDay = Object.fromEntries(plan.map((p) => [p.day_of_week, p]))
+  const current = profile?.workout_type || 'gym'
+  const [switching, setSwitching] = useState(null)
+
+  async function switchDiscipline(discipline) {
+    if (discipline === current || switching) return
+    setSwitching(discipline)
+    // regenerate the weekly plan for the new discipline; history (workout_log) is untouched
+    const newPlan = generateWorkoutPlan({
+      experience: profile?.experience,
+      workouts_per_week: profile?.workouts_per_week,
+      workout_type: discipline,
+    })
+    await supabase.from('users').update({ workout_type: discipline }).eq('id', user.id)
+    await supabase.from('workout_plan').delete().eq('user_id', user.id)
+    const { error } = await supabase.from('workout_plan').insert(
+      newPlan.map((day) => ({
+        user_id: user.id,
+        day_of_week: day.day_of_week,
+        workout_name: day.workout_name,
+        muscle_groups: day.muscle_groups,
+        exercises_json: day.exercises,
+        workout_type: day.workout_type,
+      }))
+    )
+    setSwitching(null)
+    if (error) return showToast('שגיאה בעדכון התוכנית 😕')
+    showToast(`התוכנית עודכנה ל${DISCIPLINE_LABELS[discipline]} ${DISCIPLINE_EMOJI[discipline]}`)
+    await Promise.all([reloadPlan(), refreshProfile()])
+  }
+
   return (
     <div className="flex flex-col gap-2.5">
+      <section className="card !py-3 fade-up">
+        <p className="label-muted text-sm mb-2">סוג האימון — בחר כדי לבנות מחדש את התוכנית השבועית</p>
+        <div className="grid grid-cols-2 gap-2">
+          {DISCIPLINES.map((d) => (
+            <button
+              key={d.key}
+              onClick={() => switchDiscipline(d.key)}
+              disabled={!!switching}
+              className="card-2 p-2.5 text-sm font-bold flex items-center gap-2 justify-center transition-all"
+              style={
+                current === d.key
+                  ? { borderColor: 'var(--lime-border)', background: 'var(--lime-dim)', color: 'var(--lime)' }
+                  : { color: 'var(--muted)' }
+              }
+            >
+              <span className="text-lg">{d.emoji}</span>
+              {switching === d.key ? '...' : d.label}
+            </button>
+          ))}
+        </div>
+      </section>
       {DAY_KEYS.map((day, i) => {
         const entry = byDay[day]
         const isToday = day === todayKey()
@@ -127,6 +191,7 @@ function TodayTab({ plan, user, showToast }) {
 
   const [actualWeights, setActualWeights] = useState({})
   const [timerFor, setTimerFor] = useState(null) // exercise index with active rest timer
+  const [restSeconds, setRestSeconds] = useState(60) // configurable rest duration
   const [celebrating, setCelebrating] = useState(false)
   const [completed, setCompleted] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -139,6 +204,7 @@ function TodayTab({ plan, user, showToast }) {
       user_id: user.id,
       date: todayISO(),
       workout_name: todayPlan.workout_name,
+      workout_type: todayPlan.workout_type || 'gym',
       exercises_json: exercises.map((ex, i) => ({
         ...ex,
         actual_weight_kg: actualWeights[i] !== undefined && actualWeights[i] !== '' ? +actualWeights[i] : ex.weight_kg,
@@ -175,9 +241,32 @@ function TodayTab({ plan, user, showToast }) {
           <h2 className="section-title">{todayPlan.workout_name}</h2>
           {completed && <CheckCircle2 size={20} style={{ color: 'var(--lime)' }} />}
         </div>
-        <p className="label-muted text-sm mb-4">
+        <p className="label-muted text-sm mb-3">
           {todayPlan.muscle_groups} · {exercises.length} תרגילים · לחץ על תרגיל לטיימר מנוחה ⏱️
         </p>
+
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <span className="label-muted shrink-0" style={{ fontSize: 12 }}>זמן מנוחה:</span>
+          {[30, 60, 90, 120].map((s) => (
+            <button
+              key={s}
+              onClick={() => setRestSeconds(s)}
+              className={`chip !px-2.5 !py-1 ${restSeconds === s ? 'active' : ''}`}
+              style={{ fontSize: 12 }}
+            >
+              {s} שנ׳
+            </button>
+          ))}
+          <input
+            type="number"
+            min={5}
+            max={600}
+            className="input-dark !py-1 !px-2 !text-sm !w-16 text-center"
+            value={restSeconds}
+            onChange={(e) => setRestSeconds(Math.max(5, Math.min(600, +e.target.value || 5)))}
+            aria-label="זמן מנוחה מותאם"
+          />
+        </div>
 
         <div className="flex flex-col gap-2.5">
           {exercises.map((ex, i) => (
@@ -198,23 +287,25 @@ function TodayTab({ plan, user, showToast }) {
                 )}
               </button>
 
-              <div className="flex items-center gap-2 mt-2">
-                <label className="label-muted shrink-0" style={{ fontSize: 12 }}>
-                  משקל בפועל:
-                </label>
-                <input
-                  type="number"
-                  className="input-dark !py-1.5 !px-3 !text-sm !w-24"
-                  placeholder={`${ex.weight_kg}`}
-                  value={actualWeights[i] ?? ''}
-                  onChange={(e) => setActualWeights((w) => ({ ...w, [i]: e.target.value }))}
-                />
-                <span className="label-muted" style={{ fontSize: 12 }}>
-                  ק"ג
-                </span>
-              </div>
+              {(todayPlan.workout_type || 'gym') === 'gym' && (
+                <div className="flex items-center gap-2 mt-2">
+                  <label className="label-muted shrink-0" style={{ fontSize: 12 }}>
+                    משקל בפועל:
+                  </label>
+                  <input
+                    type="number"
+                    className="input-dark !py-1.5 !px-3 !text-sm !w-24"
+                    placeholder={`${ex.weight_kg}`}
+                    value={actualWeights[i] ?? ''}
+                    onChange={(e) => setActualWeights((w) => ({ ...w, [i]: e.target.value }))}
+                  />
+                  <span className="label-muted" style={{ fontSize: 12 }}>
+                    ק"ג
+                  </span>
+                </div>
+              )}
 
-              {timerFor === i && <RestTimer onDone={() => setTimerFor(null)} />}
+              {timerFor === i && <RestTimer seconds={restSeconds} onDone={() => setTimerFor(null)} />}
             </div>
           ))}
         </div>
@@ -296,7 +387,163 @@ function beep() {
   }
 }
 
-/* ───────────────────────── Tab 3: History ───────────────────────── */
+/* ───────────────────────── Tab 3: Add Manual Workout ───────────────────────── */
+
+function AddWorkoutTab({ user, profile, showToast, onAdded }) {
+  const [type, setType] = useState(profile?.workout_type || 'gym')
+  const [name, setName] = useState('')
+  const [duration, setDuration] = useState(45)
+  const [exercises, setExercises] = useState([{ name: '', sets: 3, reps: 10, weight_kg: 0 }])
+  const [saving, setSaving] = useState(false)
+
+  const isGym = type === 'gym'
+
+  function updateExercise(i, key, value) {
+    setExercises((list) => list.map((ex, j) => (j === i ? { ...ex, [key]: value } : ex)))
+  }
+  function addExerciseRow() {
+    setExercises((list) => [...list, { name: '', sets: 3, reps: 10, weight_kg: 0 }])
+  }
+  function removeExerciseRow(i) {
+    setExercises((list) => list.filter((_, j) => j !== i))
+  }
+
+  async function save() {
+    if (!name.trim()) return showToast('תן שם לאימון')
+    setSaving(true)
+    const cleanExercises = isGym
+      ? exercises
+          .filter((ex) => ex.name.trim())
+          .map((ex) => ({
+            name: ex.name.trim(),
+            sets: +ex.sets || 0,
+            reps: +ex.reps || 0,
+            weight_kg: +ex.weight_kg || 0,
+            actual_weight_kg: +ex.weight_kg || 0,
+          }))
+      : []
+    const { error } = await supabase.from('workout_log').insert({
+      user_id: user.id,
+      date: todayISO(),
+      workout_name: name.trim(),
+      workout_type: type,
+      exercises_json: cleanExercises,
+      duration_min: +duration || null,
+      completed: true,
+    })
+    setSaving(false)
+    if (error) return showToast('שגיאה בשמירה 😕')
+    showToast('האימון נשמר בהיסטוריה! 🎉')
+    onAdded()
+  }
+
+  return (
+    <section className="card fade-up fade-up-2 flex flex-col gap-4">
+      <div>
+        <label className="label-muted block mb-1.5">סוג אימון</label>
+        <div className="grid grid-cols-2 gap-2">
+          {DISCIPLINES.map((d) => (
+            <button
+              key={d.key}
+              onClick={() => setType(d.key)}
+              className="card-2 p-2.5 text-sm font-bold flex items-center gap-2 justify-center transition-all"
+              style={
+                type === d.key
+                  ? { borderColor: 'var(--lime-border)', background: 'var(--lime-dim)', color: 'var(--lime)' }
+                  : { color: 'var(--muted)' }
+              }
+            >
+              <span className="text-lg">{d.emoji}</span>
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="label-muted block mb-1.5">שם האימון</label>
+        <input
+          className="input-dark"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={isGym ? 'לדוגמה: חזה + יד אחורית' : 'לדוגמה: שיעור יוגה בוקר'}
+        />
+      </div>
+
+      <div>
+        <label className="label-muted block mb-1.5">משך (דקות)</label>
+        <input
+          className="input-dark !w-32"
+          type="number"
+          min={1}
+          max={300}
+          value={duration}
+          onChange={(e) => setDuration(e.target.value)}
+        />
+      </div>
+
+      {isGym && (
+        <div>
+          <label className="label-muted block mb-1.5">תרגילים</label>
+          <div className="flex flex-col gap-2">
+            {exercises.map((ex, i) => (
+              <div key={i} className="card-2 p-2.5 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    className="input-dark !py-1.5 !px-3 !text-sm flex-1"
+                    value={ex.name}
+                    onChange={(e) => updateExercise(i, 'name', e.target.value)}
+                    placeholder={`תרגיל ${i + 1}`}
+                  />
+                  {exercises.length > 1 && (
+                    <button onClick={() => removeExerciseRow(i)} aria-label="הסר תרגיל">
+                      <Trash2 size={16} style={{ color: 'var(--muted)' }} />
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <NumField label="סטים" value={ex.sets} onChange={(v) => updateExercise(i, 'sets', v)} />
+                  <NumField label="חזרות" value={ex.reps} onChange={(v) => updateExercise(i, 'reps', v)} />
+                  <NumField label='ק"ג' value={ex.weight_kg} onChange={(v) => updateExercise(i, 'weight_kg', v)} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={addExerciseRow}
+            className="btn-ghost !py-2 text-sm mt-2 flex items-center justify-center gap-1.5"
+            style={{ color: 'var(--lime)', borderColor: 'var(--lime-border)' }}
+          >
+            <Plus size={15} /> הוסף תרגיל
+          </button>
+        </div>
+      )}
+
+      <button className="btn-primary flex items-center justify-center gap-1.5" onClick={save} disabled={saving}>
+        <Plus size={17} />
+        {saving ? 'שומר...' : 'שמור אימון'}
+      </button>
+    </section>
+  )
+}
+
+function NumField({ label, value, onChange }) {
+  return (
+    <div className="flex-1">
+      <label className="label-muted block mb-0.5 text-center" style={{ fontSize: 11 }}>
+        {label}
+      </label>
+      <input
+        type="number"
+        className="input-dark !py-1.5 !px-2 !text-sm text-center w-full"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  )
+}
+
+/* ───────────────────────── Tab 4: History ───────────────────────── */
 
 function HistoryTab({ user }) {
   const [logs, setLogs] = useState(null)
@@ -333,15 +580,18 @@ function HistoryTab({ user }) {
       {logs.map((log, i) => (
         <section key={log.id} className={`card !py-3.5 fade-up fade-up-${Math.min(i + 1, 6)} flex items-center gap-3`}>
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg"
             style={{ background: 'var(--lime-dim)', border: '1px solid var(--lime-border)' }}
           >
-            <Dumbbell size={17} style={{ color: 'var(--lime)' }} />
+            {DISCIPLINE_EMOJI[log.workout_type] || <Dumbbell size={17} style={{ color: 'var(--lime)' }} />}
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-sm truncate">{log.workout_name}</p>
             <p className="label-muted" style={{ fontSize: 12 }}>
-              {hebrewShortDate(log.date)} · {log.duration_min} דק׳ · {(log.exercises_json || []).length} תרגילים
+              {hebrewShortDate(log.date)}
+              {log.workout_type ? ` · ${DISCIPLINE_LABELS[log.workout_type] || log.workout_type}` : ''}
+              {log.duration_min ? ` · ${log.duration_min} דק׳` : ''}
+              {(log.exercises_json || []).length > 0 ? ` · ${log.exercises_json.length} תרגילים` : ''}
             </p>
           </div>
           {log.completed && (
@@ -360,25 +610,52 @@ function HistoryTab({ user }) {
 
 /* ───────────────────────── Tab 4: Exercise Library ───────────────────────── */
 
-function LibraryTab() {
-  const [filter, setFilter] = useState('all')
-  const filtered = filter === 'all' ? exerciseLibrary : exerciseLibrary.filter((e) => e.muscle_group === filter)
+function LibraryTab({ profile }) {
+  const [discipline, setDiscipline] = useState(profile?.workout_type || 'gym')
+  const [muscle, setMuscle] = useState('all') // gym-only sub-filter
+
+  // gym uses the muscle-group library; other disciplines use disciplineMovements
+  const isGym = discipline === 'gym'
+  const pool = isGym ? exerciseLibrary : disciplineMovements.filter((m) => m.muscle_group === discipline)
+  const list = isGym && muscle !== 'all' ? pool.filter((e) => e.muscle_group === muscle) : pool
+
+  function badgeFor(ex) {
+    if (isGym) return MUSCLE_GROUPS.find((m) => m.key === ex.muscle_group)?.label
+    return DISCIPLINE_LABELS[discipline]
+  }
 
   return (
     <>
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 fade-up fade-up-2" style={{ scrollbarWidth: 'none' }}>
-        <button className={`chip ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>
-          הכל
-        </button>
-        {MUSCLE_GROUPS.map((mg) => (
-          <button key={mg.key} className={`chip ${filter === mg.key ? 'active' : ''}`} onClick={() => setFilter(mg.key)}>
-            {mg.label}
+        {DISCIPLINES.map((d) => (
+          <button
+            key={d.key}
+            className={`chip ${discipline === d.key ? 'active' : ''}`}
+            onClick={() => {
+              setDiscipline(d.key)
+              setMuscle('all')
+            }}
+          >
+            {d.emoji} {d.label}
           </button>
         ))}
       </div>
 
+      {isGym && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 fade-up fade-up-2" style={{ scrollbarWidth: 'none' }}>
+          <button className={`chip ${muscle === 'all' ? 'active' : ''}`} onClick={() => setMuscle('all')}>
+            הכל
+          </button>
+          {MUSCLE_GROUPS.map((mg) => (
+            <button key={mg.key} className={`chip ${muscle === mg.key ? 'active' : ''}`} onClick={() => setMuscle(mg.key)}>
+              {mg.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-col gap-2.5">
-        {filtered.map((ex, i) => (
+        {list.map((ex, i) => (
           <section key={ex.name} className={`card !py-3.5 fade-up fade-up-${Math.min((i % 6) + 1, 6)}`}>
             <div className="flex items-center justify-between mb-1">
               <p className="font-bold text-sm">{ex.name}</p>
@@ -386,7 +663,7 @@ function LibraryTab() {
                 className="text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0"
                 style={{ background: 'var(--lime-dim)', color: 'var(--lime)', border: '1px solid var(--lime-border)' }}
               >
-                {MUSCLE_GROUPS.find((m) => m.key === ex.muscle_group)?.label}
+                {badgeFor(ex)}
               </span>
             </div>
             <p className="label-muted" style={{ fontSize: 12 }}>

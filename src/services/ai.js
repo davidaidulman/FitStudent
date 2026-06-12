@@ -25,9 +25,10 @@ export async function generateRecipeFromFridge(imageBase64) {
 // PHASE 2: replace with Gemini API call via Make.com Scenario E
 // ("Create a personalized weekly workout plan... Return JSON {monday:{...}}")
 // Phase 1: static template generator — picks a preset weekly template by
-// experience, schedules workouts_per_week training days across the week.
-export function generateWorkoutPlan({ experience, workouts_per_week, goal }) {
-  const template = planTemplates[experience] || planTemplates.beginner
+// discipline + experience, schedules workouts_per_week training days.
+export function generateWorkoutPlan({ experience, workouts_per_week, workout_type = 'gym' }) {
+  const discipline = planTemplates[workout_type] || planTemplates.gym
+  const template = discipline[experience] || discipline.beginner || planTemplates.gym.beginner
   const count = Math.min(Math.max(workouts_per_week || 3, 1), 6)
 
   // spread training days evenly across sunday..saturday
@@ -43,7 +44,7 @@ export function generateWorkoutPlan({ experience, workouts_per_week, goal }) {
   return DAY_KEYS.map((day, i) => {
     const slotIndex = slots.indexOf(i)
     if (slotIndex === -1) {
-      return { day_of_week: day, workout_name: 'מנוחה', muscle_groups: '', exercises: [] }
+      return { day_of_week: day, workout_name: 'מנוחה', muscle_groups: '', exercises: [], workout_type }
     }
     const workout = template[slotIndex % template.length]
     return {
@@ -51,6 +52,7 @@ export function generateWorkoutPlan({ experience, workouts_per_week, goal }) {
       workout_name: workout.workout_name,
       muscle_groups: workout.muscle_groups,
       exercises: workout.exercises,
+      workout_type,
     }
   })
 }

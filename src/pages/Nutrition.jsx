@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Camera, Trash2, Refrigerator, BookmarkPlus, Clock, Users, Wallet } from 'lucide-react'
+import { Camera, Trash2, Refrigerator, BookmarkPlus, Clock, Users, Wallet, Pencil, Plus, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { analyzeFoodImage, generateRecipeFromFridge } from '../services/ai'
 import { useToast } from '../components/Toast'
 import SubTabs from '../components/SubTabs'
+import { COMMON_FOODS } from '../data/mockData'
 import { todayISO } from '../utils/dates'
 
 const TABS = [
@@ -66,12 +67,6 @@ export default function Nutrition() {
 /* ───────────────────────── Tab 1: Diary ───────────────────────── */
 
 function DiaryTab({ diary, reload, profile, showToast }) {
-  async function remove(id) {
-    await supabase.from('food_log').delete().eq('id', id)
-    showToast('הארוחה נמחקה 🗑️')
-    reload()
-  }
-
   const totals = diary.reduce(
     (a, l) => ({
       calories: a.calories + (+l.calories || 0),
@@ -95,25 +90,9 @@ function DiaryTab({ diary, reload, profile, showToast }) {
               <p className="label-muted text-sm">עדיין לא נרשם כלום — צלם ארוחה כדי להוסיף 📷</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {entries.map((entry) => {
-                  const items = entry.items_json || []
-                  const name = items.map((it) => it.name).join(' + ') || 'ארוחה'
-                  return (
-                    <div key={entry.id} className="card-2 p-3 flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate">{name}</p>
-                        <p className="label-muted" style={{ fontSize: 12 }}>
-                          🔥 {Math.round(entry.calories)} קק"ל ·{' '}
-                          <span style={{ color: 'var(--blue)' }}>💪 {Math.round(entry.protein_g)}g</span>
-                          {entry.confidence < 100 && ` · דיוק ${entry.confidence}%`}
-                        </p>
-                      </div>
-                      <button onClick={() => remove(entry.id)} aria-label="מחק">
-                        <Trash2 size={17} style={{ color: 'var(--muted)' }} />
-                      </button>
-                    </div>
-                  )
-                })}
+                {entries.map((entry) => (
+                  <DiaryEntry key={entry.id} entry={entry} reload={reload} showToast={showToast} />
+                ))}
               </div>
             )}
           </section>
@@ -150,15 +129,105 @@ function TotalStat({ value, label, target, color }) {
   )
 }
 
+function DiaryEntry({ entry, reload, showToast }) {
+  const items = entry.items_json || []
+  const name = items.map((it) => it.name).join(' + ') || 'ארוחה'
+  const [editing, setEditing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [form, setForm] = useState({
+    name,
+    calories: Math.round(entry.calories),
+    protein_g: Math.round(entry.protein_g),
+    carbs_g: Math.round(entry.carbs_g),
+    fat_g: Math.round(entry.fat_g),
+  })
+
+  async function remove() {
+    await supabase.from('food_log').delete().eq('id', entry.id)
+    showToast('הארוחה נמחקה 🗑️')
+    reload()
+  }
+
+  async function saveEdit() {
+    if (!form.name.trim()) return showToast('הזן שם מאכל')
+    setBusy(true)
+    const { error } = await supabase
+      .from('food_log')
+      .update({
+        items_json: [{ name: form.name.trim() }],
+        calories: Math.round(+form.calories || 0),
+        protein_g: Math.round(+form.protein_g || 0),
+        carbs_g: Math.round(+form.carbs_g || 0),
+        fat_g: Math.round(+form.fat_g || 0),
+      })
+      .eq('id', entry.id)
+    setBusy(false)
+    if (error) return showToast('שגיאה בעדכון 😕')
+    setEditing(false)
+    showToast('הארוחה עודכנה ✅')
+    reload()
+  }
+
+  if (editing) {
+    return (
+      <div className="card-2 p-3 flex flex-col gap-2">
+        <input
+          className="input-dark !py-1.5 !px-3 !text-sm"
+          value={form.name}
+          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+        />
+        <div className="grid grid-cols-4 gap-2">
+          <ManualField label='קק"ל' value={form.calories} onChange={(v) => setForm((f) => ({ ...f, calories: v }))} />
+          <ManualField label="חלבון" value={form.protein_g} onChange={(v) => setForm((f) => ({ ...f, protein_g: v }))} />
+          <ManualField label="פחמ׳" value={form.carbs_g} onChange={(v) => setForm((f) => ({ ...f, carbs_g: v }))} />
+          <ManualField label="שומן" value={form.fat_g} onChange={(v) => setForm((f) => ({ ...f, fat_g: v }))} />
+        </div>
+        <div className="flex gap-2">
+          <button className="btn-primary !py-2 text-sm" onClick={saveEdit} disabled={busy}>
+            {busy ? 'שומר...' : 'שמור'}
+          </button>
+          <button className="btn-ghost !py-2 text-sm !w-auto px-4" onClick={() => setEditing(false)}>
+            ביטול
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card-2 p-3 flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold truncate">{name}</p>
+        <p className="label-muted" style={{ fontSize: 12 }}>
+          🔥 {Math.round(entry.calories)} קק"ל ·{' '}
+          <span style={{ color: 'var(--blue)' }}>💪 {Math.round(entry.protein_g)}g</span>
+          {entry.confidence < 100 && ` · דיוק ${entry.confidence}%`}
+        </p>
+      </div>
+      <button onClick={() => setEditing(true)} aria-label="ערוך">
+        <Pencil size={16} style={{ color: 'var(--muted)' }} />
+      </button>
+      <button onClick={remove} aria-label="מחק">
+        <Trash2 size={17} style={{ color: 'var(--muted)' }} />
+      </button>
+    </div>
+  )
+}
+
 /* ───────────────────────── Tab 2: Log Meal ───────────────────────── */
+
+function emptyManual() {
+  return { name: '', calories: '', protein_g: '', carbs_g: '', fat_g: '' }
+}
 
 function LogMealTab({ user, onAdded, showToast }) {
   const fileRef = useRef(null)
-  const [phase, setPhase] = useState('idle') // idle | analyzing | result
+  const [phase, setPhase] = useState('idle') // idle | analyzing | result | manual
   const [result, setResult] = useState(null)
   const [quantity, setQuantity] = useState(100) // percent
   const [mealType, setMealType] = useState('lunch')
   const [saving, setSaving] = useState(false)
+  const [manual, setManual] = useState(emptyManual())
 
   async function onFile(e) {
     const file = e.target.files?.[0]
@@ -197,24 +266,139 @@ function LogMealTab({ user, onAdded, showToast }) {
     onAdded()
   }
 
+  function startManual(prefill) {
+    setManual(prefill || emptyManual())
+    setPhase('manual')
+  }
+
+  async function saveManual() {
+    if (!manual.name.trim()) return showToast('הזן שם מאכל')
+    setSaving(true)
+    const { error } = await supabase.from('food_log').insert({
+      user_id: user.id,
+      date: todayISO(),
+      meal_type: mealType,
+      items_json: [{ name: manual.name.trim() }],
+      calories: Math.round(+manual.calories || 0),
+      protein_g: Math.round(+manual.protein_g || 0),
+      carbs_g: Math.round(+manual.carbs_g || 0),
+      fat_g: Math.round(+manual.fat_g || 0),
+      confidence: 100,
+    })
+    setSaving(false)
+    if (error) return showToast('שגיאה בשמירה 😕')
+    showToast('נוסף ליומן! ✅')
+    setManual(emptyManual())
+    setPhase('idle')
+    onAdded()
+  }
+
   return (
     <>
       {phase === 'idle' && (
-        <section className="card fade-up fade-up-2 flex flex-col items-center py-10 gap-4">
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="w-28 h-28 rounded-full flex items-center justify-center glow-lime"
-            style={{ background: 'var(--lime)', color: '#040404' }}
-          >
-            <Camera size={44} strokeWidth={1.8} />
-          </button>
-          <div className="text-center">
-            <p className="font-bold text-lg">צלם את הארוחה שלך</p>
-            <p className="label-muted text-sm mt-1">
-              ה-AI יזהה את המזון ויחשב קלוריות ומאקרוס אוטומטית
-            </p>
+        <>
+          <section className="card fade-up fade-up-2 flex flex-col items-center py-8 gap-4">
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="w-24 h-24 rounded-full flex items-center justify-center glow-lime"
+              style={{ background: 'var(--lime)', color: '#040404' }}
+            >
+              <Camera size={40} strokeWidth={1.8} />
+            </button>
+            <div className="text-center">
+              <p className="font-bold text-lg">צלם את הארוחה שלך</p>
+              <p className="label-muted text-sm mt-1">ה-AI יזהה את המזון ויחשב קלוריות ומאקרוס</p>
+            </div>
+            <button
+              onClick={() => startManual()}
+              className="btn-ghost flex items-center justify-center gap-2"
+              style={{ color: 'var(--lime)', borderColor: 'var(--lime-border)' }}
+            >
+              <Pencil size={15} /> הוסף ידנית
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onFile} />
+          </section>
+
+          <section className="card fade-up fade-up-3">
+            <h2 className="font-bold mb-2">⚡ הוספה מהירה</h2>
+            <p className="label-muted text-sm mb-3">הקש על מאכל כדי לטעון את הערכים — אפשר לערוך לפני שמירה</p>
+            <div className="grid grid-cols-2 gap-2">
+              {COMMON_FOODS.map((f) => (
+                <button
+                  key={f.name}
+                  onClick={() =>
+                    startManual({
+                      name: `${f.name} (${f.portion})`,
+                      calories: f.calories,
+                      protein_g: f.protein_g,
+                      carbs_g: f.carbs_g,
+                      fat_g: f.fat_g,
+                    })
+                  }
+                  className="card-2 p-2.5 text-right flex items-center gap-2"
+                >
+                  <span className="text-xl shrink-0">{f.emoji}</span>
+                  <span className="min-w-0">
+                    <span className="text-sm font-semibold block truncate">{f.name}</span>
+                    <span className="label-muted block" style={{ fontSize: 11 }}>
+                      {f.calories} קק"ל · {f.protein_g}g חלבון
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {phase === 'manual' && (
+        <section className="card fade-up flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Pencil size={18} style={{ color: 'var(--lime)' }} />
+            <h2 className="section-title">הוספת ארוחה ידנית</h2>
           </div>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onFile} />
+
+          <div>
+            <label className="label-muted block mb-1.5">שם המאכל</label>
+            <input
+              className="input-dark"
+              value={manual.name}
+              onChange={(e) => setManual((m) => ({ ...m, name: e.target.value }))}
+              placeholder="לדוגמה: סלט עוף"
+            />
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            <ManualField label='קק"ל' value={manual.calories} onChange={(v) => setManual((m) => ({ ...m, calories: v }))} />
+            <ManualField label="חלבון" value={manual.protein_g} onChange={(v) => setManual((m) => ({ ...m, protein_g: v }))} />
+            <ManualField label="פחמ׳" value={manual.carbs_g} onChange={(v) => setManual((m) => ({ ...m, carbs_g: v }))} />
+            <ManualField label="שומן" value={manual.fat_g} onChange={(v) => setManual((m) => ({ ...m, fat_g: v }))} />
+          </div>
+
+          <div>
+            <label className="label-muted block mb-1.5">לאיזו ארוחה?</label>
+            <div className="grid grid-cols-4 gap-2">
+              {MEAL_TYPES.map((mt) => (
+                <button
+                  key={mt.key}
+                  onClick={() => setMealType(mt.key)}
+                  className={`chip !px-2 text-center justify-center ${mealType === mt.key ? 'active' : ''}`}
+                >
+                  {mt.emoji} {mt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button className="btn-primary flex items-center justify-center gap-1.5" onClick={saveManual} disabled={saving}>
+              <Check size={17} />
+              {saving ? 'שומר...' : 'הוסף ליומן'}
+            </button>
+            <button className="btn-ghost !w-auto px-4" onClick={() => setPhase('idle')}>
+              ביטול
+            </button>
+          </div>
         </section>
       )}
 
@@ -296,6 +480,24 @@ function MacroBadge({ value, label, color }) {
       <p className="label-muted" style={{ fontSize: 11 }}>
         {label}
       </p>
+    </div>
+  )
+}
+
+function ManualField({ label, value, onChange }) {
+  return (
+    <div>
+      <label className="label-muted block mb-0.5 text-center" style={{ fontSize: 11 }}>
+        {label}
+      </label>
+      <input
+        type="number"
+        min={0}
+        className="input-dark !py-1.5 !px-2 !text-sm text-center w-full"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="0"
+      />
     </div>
   )
 }

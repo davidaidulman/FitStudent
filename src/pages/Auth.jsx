@@ -1,44 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Mail, Lock, Play } from 'lucide-react'
+import { Mail, Lock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
-import { demoProfile } from '../data/mockData'
-import { calcAllTargets } from '../utils/nutrition'
-import { generateWorkoutPlan } from '../services/ai'
-
-// NOTE: Supabase email validation rejects @fitstudent.app (no MX records),
-// so the demo account lives on a deliverable domain instead
-const DEMO_EMAIL = 'fitstudent.demo42@gmail.com'
-const DEMO_PASSWORD = 'demo1234'
-
-// Creates users row + weekly workout plan for the demo account if missing
-async function ensureDemoProfile(userId) {
-  const { data: existing } = await supabase
-    .from('users')
-    .select('id')
-    .eq('id', userId)
-    .maybeSingle()
-  if (existing) return
-
-  const targets = calcAllTargets(demoProfile)
-  await supabase.from('users').insert({ id: userId, ...demoProfile, ...targets })
-
-  const plan = generateWorkoutPlan(demoProfile)
-  await supabase.from('workout_plan').insert(
-    plan.map((day) => ({
-      user_id: userId,
-      day_of_week: day.day_of_week,
-      workout_name: day.workout_name,
-      muscle_groups: day.muscle_groups,
-      exercises_json: day.exercises,
-    }))
-  )
-}
 
 export default function Auth({ mode = 'login' }) {
   const navigate = useNavigate()
-  const { setSetupBusy, loadProfile } = useAuth()
   const [isSignup, setIsSignup] = useState(mode === 'signup')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -67,43 +33,6 @@ export default function Auth({ mode = 'login' }) {
     } catch (err) {
       setError(translateError(err.message))
     } finally {
-      setBusy(false)
-    }
-  }
-
-  async function handleDemo() {
-    setError(null)
-    setBusy(true)
-    setSetupBusy(true) // hold route redirects until demo profile is ready
-    try {
-      let { data, error } = await supabase.auth.signInWithPassword({
-        email: DEMO_EMAIL,
-        password: DEMO_PASSWORD,
-      })
-      if (error) {
-        // demo account doesn't exist yet — create it once
-        const signUpRes = await supabase.auth.signUp({
-          email: DEMO_EMAIL,
-          password: DEMO_PASSWORD,
-        })
-        if (signUpRes.error) throw signUpRes.error
-        data = signUpRes.data
-        if (!data.session) {
-          const retry = await supabase.auth.signInWithPassword({
-            email: DEMO_EMAIL,
-            password: DEMO_PASSWORD,
-          })
-          if (retry.error) throw retry.error
-          data = retry.data
-        }
-      }
-      await ensureDemoProfile(data.session.user.id)
-      await loadProfile(data.session.user.id)
-      navigate('/home')
-    } catch (err) {
-      setError(translateError(err.message))
-    } finally {
-      setSetupBusy(false)
       setBusy(false)
     }
   }
@@ -161,16 +90,6 @@ export default function Auth({ mode = 'login' }) {
             {busy ? '...' : isSignup ? 'הרשמה' : 'התחברות'}
           </button>
         </form>
-
-        <button
-          onClick={handleDemo}
-          disabled={busy}
-          className="btn-ghost mt-3 flex items-center justify-center gap-2"
-          style={{ color: 'var(--lime)', borderColor: 'var(--lime-border)' }}
-        >
-          <Play size={15} />
-          מצב דמו — כניסה בלחיצה אחת
-        </button>
 
         <button
           onClick={() => {
