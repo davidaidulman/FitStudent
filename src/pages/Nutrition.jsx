@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Camera, Trash2, Refrigerator, BookmarkPlus, Clock, Users, Wallet, Pencil, Plus, Check } from 'lucide-react'
+import { Camera, Trash2, Refrigerator, BookmarkPlus, Clock, Users, Wallet, Pencil, Plus, Check, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { analyzeFoodImage, generateRecipeFromFridge } from '../services/ai'
+import { analyzeFoodImage, detectFridgeIngredients, recipeFromIngredients } from '../services/ai'
 import { useToast } from '../components/Toast'
 import SubTabs from '../components/SubTabs'
-import { COMMON_FOODS } from '../data/mockData'
+import { COMMON_FOODS, recipes as recommendedRecipes } from '../data/mockData'
 import { todayISO } from '../utils/dates'
 
 const TABS = [
   { key: 'diary', label: 'יומן' },
-  { key: 'log', label: 'צלם ארוחה' },
-  { key: 'fridge', label: 'מקרר → מתכון' },
+  { key: 'log', label: 'הוסף ארוחה' },
+  { key: 'fridge', label: 'מהמקרר לצלחת' },
   { key: 'saved', label: 'מתכונים שמורים' },
 ]
 
@@ -217,7 +217,7 @@ function DiaryEntry({ entry, reload, showToast }) {
 /* ───────────────────────── Tab 2: Log Meal ───────────────────────── */
 
 function emptyManual() {
-  return { name: '', calories: '', protein_g: '', carbs_g: '', fat_g: '' }
+  return { name: '', calories: '', protein_g: '', carbs_g: '', fat_g: '', grams: '', base: null }
 }
 
 function LogMealTab({ user, onAdded, showToast }) {
@@ -271,6 +271,22 @@ function LogMealTab({ user, onAdded, showToast }) {
     setPhase('manual')
   }
 
+  // rescale macros proportionally when the user edits the gram weight of a quick food
+  function setGrams(g) {
+    setManual((m) => {
+      if (!m.base || g === '' || +g <= 0) return { ...m, grams: g }
+      const f = +g / m.base.grams
+      return {
+        ...m,
+        grams: g,
+        calories: Math.round(m.base.calories * f),
+        protein_g: Math.round(m.base.protein_g * f),
+        carbs_g: Math.round(m.base.carbs_g * f),
+        fat_g: Math.round(m.base.fat_g * f),
+      }
+    })
+  }
+
   async function saveManual() {
     if (!manual.name.trim()) return showToast('הזן שם מאכל')
     setSaving(true)
@@ -301,7 +317,7 @@ function LogMealTab({ user, onAdded, showToast }) {
             <button
               onClick={() => fileRef.current?.click()}
               className="w-24 h-24 rounded-full flex items-center justify-center glow-lime"
-              style={{ background: 'var(--lime)', color: '#040404' }}
+              style={{ background: 'var(--lime)', color: 'var(--on-accent)' }}
             >
               <Camera size={40} strokeWidth={1.8} />
             </button>
@@ -328,7 +344,9 @@ function LogMealTab({ user, onAdded, showToast }) {
                   key={f.name}
                   onClick={() =>
                     startManual({
-                      name: `${f.name} (${f.portion})`,
+                      name: f.name,
+                      grams: f.grams,
+                      base: { grams: f.grams, calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, fat_g: f.fat_g },
                       calories: f.calories,
                       protein_g: f.protein_g,
                       carbs_g: f.carbs_g,
@@ -341,7 +359,7 @@ function LogMealTab({ user, onAdded, showToast }) {
                   <span className="min-w-0">
                     <span className="text-sm font-semibold block truncate">{f.name}</span>
                     <span className="label-muted block" style={{ fontSize: 11 }}>
-                      {f.calories} קק"ל · {f.protein_g}g חלבון
+                      {f.grams}g · {f.calories} קק"ל
                     </span>
                   </span>
                 </button>
@@ -367,6 +385,22 @@ function LogMealTab({ user, onAdded, showToast }) {
               placeholder="לדוגמה: סלט עוף"
             />
           </div>
+
+          {manual.base && (
+            <div>
+              <label className="label-muted block mb-1.5">
+                משקל בפועל (גרם) — ערכים מתעדכנים אוטומטית לפי המשקל ⚖️
+              </label>
+              <input
+                type="number"
+                min={1}
+                className="input-dark !w-32"
+                value={manual.grams}
+                onChange={(e) => setGrams(e.target.value)}
+                placeholder="גרם"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-4 gap-2">
             <ManualField label='קק"ל' value={manual.calories} onChange={(v) => setManual((m) => ({ ...m, calories: v }))} />
@@ -506,19 +540,49 @@ function ManualField({ label, value, onChange }) {
 
 function FridgeTab({ showToast }) {
   const fileRef = useRef(null)
-  const [phase, setPhase] = useState('idle')
+  const [phase, setPhase] = useState('idle') // idle | detecting | review | building | result
+  const [ingredients, setIngredients] = useState([])
+  const [newIng, setNewIng] = useState('')
+  const [textInput, setTextInput] = useState('')
   const [recipe, setRecipe] = useState(null)
   const [saving, setSaving] = useState(false)
 
   async function onFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    setPhase('analyzing')
-    // PHASE 2: convert file to base64 and POST to Make.com Scenario B
-    const mock = await generateRecipeFromFridge(null)
-    setRecipe(mock)
-    setPhase('result')
+    setPhase('detecting')
+    // PHASE 2: convert file to base64 → detectFridgeIngredients posts to Make.com Scenario B
+    const detected = await detectFridgeIngredients(null)
+    setIngredients(detected)
+    setPhase('review')
     e.target.value = ''
+  }
+
+  function useTextIngredients() {
+    const parsed = textInput
+      .split(/[,\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (parsed.length === 0) return showToast('הקלד לפחות מרכיב אחד')
+    setIngredients(parsed)
+    setPhase('review')
+  }
+
+  function removeIng(i) {
+    setIngredients((list) => list.filter((_, j) => j !== i))
+  }
+  function addIng() {
+    if (!newIng.trim()) return
+    setIngredients((list) => [...list, newIng.trim()])
+    setNewIng('')
+  }
+
+  async function buildRecipe() {
+    if (ingredients.length === 0) return showToast('הוסף לפחות מרכיב אחד')
+    setPhase('building')
+    const r = await recipeFromIngredients(ingredients)
+    setRecipe(r)
+    setPhase('result')
   }
 
   async function saveRecipe() {
@@ -534,32 +598,104 @@ function FridgeTab({ showToast }) {
     showToast(error ? 'שגיאה בשמירה 😕' : 'המתכון נשמר! 📖')
   }
 
+  function reset() {
+    setIngredients([])
+    setTextInput('')
+    setRecipe(null)
+    setPhase('idle')
+  }
+
   return (
     <>
       {phase === 'idle' && (
-        <section className="card fade-up fade-up-2 flex flex-col items-center py-10 gap-4">
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="w-28 h-28 rounded-full flex items-center justify-center glow-lime"
-            style={{ background: 'var(--lime)', color: '#040404' }}
-          >
-            <Refrigerator size={44} strokeWidth={1.8} />
-          </button>
-          <div className="text-center">
-            <p className="font-bold text-lg">צלם את המקרר</p>
-            <p className="label-muted text-sm mt-1">
-              נזהה מה יש לך ונציע מתכון מהיר, זול ועשיר בחלבון
-            </p>
-          </div>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onFile} />
-        </section>
+        <>
+          <section className="card fade-up fade-up-2 flex flex-col items-center py-8 gap-4">
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="w-24 h-24 rounded-full flex items-center justify-center glow-lime"
+              style={{ background: 'var(--lime)', color: 'var(--on-accent)' }}
+            >
+              <Refrigerator size={40} strokeWidth={1.8} />
+            </button>
+            <div className="text-center">
+              <p className="font-bold text-lg">צלם את המקרר</p>
+              <p className="label-muted text-sm mt-1">נזהה מה יש לך ונציע מתכון מהיר, זול ועשיר בחלבון</p>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onFile} />
+          </section>
+
+          <section className="card fade-up fade-up-3">
+            <h2 className="font-bold mb-2">⌨️ או הקלד מה יש לך</h2>
+            <p className="label-muted text-sm mb-3">רשום מרכיבים מופרדים בפסיק או שורה — וה-AI יציע מתכון</p>
+            <textarea
+              className="input-dark"
+              rows={3}
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder="לדוגמה: ביצים, עגבנייה, גבינה לבנה, לחם מלא"
+            />
+            <button className="btn-primary mt-3" onClick={useTextIngredients}>
+              נתח מרכיבים 🔍
+            </button>
+          </section>
+        </>
       )}
 
-      {phase === 'analyzing' && (
+      {phase === 'detecting' && (
         <section className="card fade-up flex flex-col items-center py-12 gap-4">
           <div className="spinner" />
           <p className="font-bold">מזהה מרכיבים... 🥕</p>
-          <p className="label-muted text-sm">בונה מתכון מותאם ליעדים שלך</p>
+          <p className="label-muted text-sm">Claude Vision סורק את המקרר</p>
+        </section>
+      )}
+
+      {phase === 'review' && (
+        <section className="card fade-up flex flex-col gap-3">
+          <h2 className="section-title">המרכיבים שזוהו 🧺</h2>
+          <p className="label-muted text-sm">ערוך, הסר או הוסף מרכיבים לפני בניית המתכון</p>
+          <div className="flex flex-wrap gap-2">
+            {ingredients.map((ing, i) => (
+              <span
+                key={i}
+                className="chip active flex items-center gap-1.5"
+                style={{ paddingTop: 6, paddingBottom: 6 }}
+              >
+                {ing}
+                <button onClick={() => removeIng(i)} aria-label="הסר">
+                  <X size={13} />
+                </button>
+              </span>
+            ))}
+            {ingredients.length === 0 && <p className="label-muted text-sm">אין מרכיבים — הוסף למטה</p>}
+          </div>
+          <div className="flex gap-2">
+            <input
+              className="input-dark"
+              value={newIng}
+              onChange={(e) => setNewIng(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addIng()}
+              placeholder="הוסף מרכיב..."
+            />
+            <button className="btn-ghost !w-auto px-4" onClick={addIng}>
+              <Plus size={16} />
+            </button>
+          </div>
+          <div className="flex gap-2 mt-1">
+            <button className="btn-primary" onClick={buildRecipe}>
+              בנה מתכון 👨‍🍳
+            </button>
+            <button className="btn-ghost !w-auto px-4" onClick={reset}>
+              ביטול
+            </button>
+          </div>
+        </section>
+      )}
+
+      {phase === 'building' && (
+        <section className="card fade-up flex flex-col items-center py-12 gap-4">
+          <div className="spinner" />
+          <p className="font-bold">בונה מתכון... 👨‍🍳</p>
+          <p className="label-muted text-sm">מתאים מתכון למרכיבים וליעדים שלך</p>
         </section>
       )}
 
@@ -570,7 +706,7 @@ function FridgeTab({ showToast }) {
               <BookmarkPlus size={17} />
               {saving ? 'שומר...' : 'שמור מתכון'}
             </button>
-            <button className="btn-ghost !w-auto px-4" onClick={() => setPhase('idle')}>
+            <button className="btn-ghost !w-auto px-4" onClick={reset}>
               עוד אחד
             </button>
           </div>
@@ -649,21 +785,51 @@ export function RecipeCard({ recipe, children }) {
 
 /* ───────────────────────── Tab 4: Saved Recipes ───────────────────────── */
 
+function RecipeGridCard({ emoji, name, macros, cost, onClick }) {
+  return (
+    <button className="card !p-3 text-right flex flex-col gap-2" onClick={onClick}>
+      <div className="rounded-xl flex items-center justify-center text-4xl py-4 w-full" style={{ background: 'var(--bg-card-2)' }}>
+        {emoji || '🍽️'}
+      </div>
+      <p className="font-bold text-sm leading-tight">{name}</p>
+      <p className="label-muted" style={{ fontSize: 11 }}>
+        {macros?.calories} קק"ל · {macros?.protein_g}g חלבון{cost ? ` · ₪${cost}` : ''}
+      </p>
+    </button>
+  )
+}
+
 function SavedTab() {
   const [saved, setSaved] = useState([])
-  const [expanded, setExpanded] = useState(null)
+  const [expanded, setExpanded] = useState(null) // a normalized recipe object
+  const [savedView, setSavedView] = useState(false) // whether expanded came from DB (already saved)
+  const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const { toast, showToast } = useToast()
 
+  async function load() {
+    const { data } = await supabase.from('recipes_cache').select('*').order('created_at', { ascending: false })
+    setSaved(data || [])
+    setLoading(false)
+  }
   useEffect(() => {
-    supabase
-      .from('recipes_cache')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setSaved(data || [])
-        setLoading(false)
-      })
+    load()
   }, [])
+
+  async function saveRecipe(recipe) {
+    setSaving(true)
+    const { error } = await supabase.from('recipes_cache').insert({
+      recipe_name: recipe.name,
+      ingredients_hash: (recipe.ingredients || []).join('|'),
+      recipe_json: recipe,
+      macros_json: recipe.macros,
+      cost_ils: recipe.cost_ils,
+    })
+    setSaving(false)
+    if (error) return showToast('שגיאה בשמירה 😕')
+    showToast('המתכון נשמר! 📖')
+    load()
+  }
 
   if (loading)
     return (
@@ -673,43 +839,75 @@ function SavedTab() {
     )
 
   if (expanded) {
-    const recipe = { ...(expanded.recipe_json || {}), name: expanded.recipe_name, cost_ils: expanded.cost_ils }
     return (
       <>
         <button className="btn-ghost !w-auto px-4 fade-up" onClick={() => setExpanded(null)}>
           → חזרה לרשימה
         </button>
-        <RecipeCard recipe={recipe} />
+        <RecipeCard recipe={expanded}>
+          {!savedView && (
+            <button
+              className="btn-primary flex items-center justify-center gap-1.5 mt-1"
+              onClick={() => saveRecipe(expanded)}
+              disabled={saving}
+            >
+              <BookmarkPlus size={17} />
+              {saving ? 'שומר...' : 'שמור למתכונים שלי'}
+            </button>
+          )}
+        </RecipeCard>
+        {toast}
       </>
     )
   }
 
-  return saved.length === 0 ? (
-    <section className="card fade-up fade-up-2 text-center py-12">
-      <p className="text-4xl mb-3">📖</p>
-      <p className="font-bold">אין עדיין מתכונים שמורים</p>
-      <p className="label-muted text-sm mt-1">צלם את המקרר וקבל מתכון ראשון!</p>
-    </section>
-  ) : (
-    <div className="grid grid-cols-2 gap-3 fade-up fade-up-2">
-      {saved.map((r) => {
-        const macros = r.macros_json || {}
-        return (
-          <button key={r.id} className="card !p-3 text-right flex flex-col gap-2" onClick={() => setExpanded(r)}>
-            <div
-              className="rounded-xl flex items-center justify-center text-4xl py-4 w-full"
-              style={{ background: 'var(--bg-card-2)' }}
-            >
-              {r.recipe_json?.emoji || '🍽️'}
-            </div>
-            <p className="font-bold text-sm leading-tight">{r.recipe_name}</p>
-            <p className="label-muted" style={{ fontSize: 11 }}>
-              {macros.calories} קק"ל · {macros.protein_g}g חלבון
-              {r.cost_ils ? ` · ₪${r.cost_ils}` : ''}
-            </p>
-          </button>
-        )
-      })}
-    </div>
+  return (
+    <>
+      {/* Recommended quick recipes — always available, things everyone has at home */}
+      <section className="fade-up fade-up-2">
+        <h2 className="font-bold mb-2">⭐ מתכונים מומלצים מהירים</h2>
+        <div className="grid grid-cols-2 gap-3">
+          {recommendedRecipes.map((r) => (
+            <RecipeGridCard
+              key={r.name}
+              emoji={r.emoji}
+              name={r.name}
+              macros={r.macros}
+              cost={r.cost_ils}
+              onClick={() => {
+                setSavedView(false)
+                setExpanded(r)
+              }}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* User-saved recipes */}
+      <section className="fade-up fade-up-3 mt-2">
+        <h2 className="font-bold mb-2">📖 המתכונים שלי</h2>
+        {saved.length === 0 ? (
+          <p className="label-muted text-sm">עדיין לא שמרת מתכונים — שמור מהמומלצים למעלה או מ"מהמקרר לצלחת"</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {saved.map((r) => (
+              <RecipeGridCard
+                key={r.id}
+                emoji={r.recipe_json?.emoji}
+                name={r.recipe_name}
+                macros={r.macros_json}
+                cost={r.cost_ils}
+                onClick={() => {
+                  setSavedView(true)
+                  setExpanded({ ...(r.recipe_json || {}), name: r.recipe_name, cost_ils: r.cost_ils })
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {toast}
+    </>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Dumbbell, ChefHat, Droplets, Lightbulb, ChevronLeft } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Dumbbell, ChefHat, Droplets, Lightbulb, ChevronLeft, Settings2 } from 'lucide-react'
+import ThemeToggle from '../components/ThemeToggle'
 import {
   BarChart,
   Bar,
@@ -19,6 +20,7 @@ import { hebrewToday, todayISO, todayKey, last7Days, DAY_LETTERS_HE } from '../u
 
 export default function Home() {
   const { user, profile } = useAuth()
+  const navigate = useNavigate()
   const waterTargetMl = +profile?.water_target_ml || 2500
   const [todayLogs, setTodayLogs] = useState([])
   const [weekLogs, setWeekLogs] = useState([])
@@ -75,8 +77,11 @@ export default function Home() {
 
   return (
     <div className="px-4 pt-6 pb-20 flex flex-col gap-4 relative z-10">
-      {/* header */}
-      <header className="fade-up">
+      {/* header — centered greeting, theme toggle pinned to the corner */}
+      <header className="fade-up relative flex flex-col items-center text-center">
+        <div className="absolute left-0 top-0">
+          <ThemeToggle />
+        </div>
         <h1 className="text-2xl font-black">שלום {profile?.nickname || ''}! 👋</h1>
         <p className="label-muted">{hebrewToday()} 📅</p>
       </header>
@@ -136,27 +141,27 @@ export default function Home() {
         )}
       </section>
 
-      {/* recommended recipe */}
-      <section className="card fade-up fade-up-3">
-        <h2 className="section-title mb-2">🍽️ מתכון מומלץ להיום</h2>
-        <div className="flex items-center gap-3">
-          <div
-            className="card-2 flex items-center justify-center text-4xl shrink-0"
-            style={{ width: 72, height: 72 }}
-          >
-            {recipe.emoji}
+      {/* recommended recipe — taps through to the saved/quick recipes list */}
+      <Link to="/nutrition?tab=saved" className="block">
+        <section className="card fade-up fade-up-3">
+          <h2 className="section-title mb-2">🍽️ מתכון מומלץ להיום</h2>
+          <div className="flex items-center gap-3">
+            <div
+              className="card-2 flex items-center justify-center text-4xl shrink-0"
+              style={{ width: 72, height: 72 }}
+            >
+              {recipe.emoji}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold truncate">{recipe.name}</p>
+              <p className="label-muted">
+                {recipe.macros.calories} קק"ל · {recipe.macros.protein_g}g חלבון · {recipe.prep_time_min} דק׳
+              </p>
+            </div>
+            <ChefHat size={20} style={{ color: 'var(--lime)' }} className="shrink-0" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold truncate">{recipe.name}</p>
-            <p className="label-muted">
-              {recipe.macros.calories} קק"ל · {recipe.macros.protein_g}g חלבון · {recipe.prep_time_min} דק׳
-            </p>
-          </div>
-          <Link to="/nutrition?tab=fridge" className="shrink-0">
-            <ChefHat size={20} style={{ color: 'var(--lime)' }} />
-          </Link>
-        </div>
-      </section>
+        </section>
+      </Link>
 
       {/* weekly progress chart */}
       <section className="card fade-up fade-up-4">
@@ -206,9 +211,19 @@ export default function Home() {
             <Droplets size={18} style={{ color: 'var(--teal)' }} />
             מעקב מים
           </h2>
-          <span className="label-muted">
-            {(waterMl / 1000).toFixed(2)} / {(waterTargetMl / 1000).toFixed(2)} ליטר
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="label-muted">
+              {(waterMl / 1000).toFixed(2)} / {(waterTargetMl / 1000).toFixed(2)} ליטר
+            </span>
+            <button
+              onClick={() => navigate('/profile?tab=settings')}
+              aria-label="עדכן יעד מים"
+              className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: 'var(--bg-card-2)', border: '1px solid var(--border)' }}
+            >
+              <Settings2 size={14} style={{ color: 'var(--teal)' }} />
+            </button>
+          </div>
         </div>
         <div className="h-3 rounded-full overflow-hidden mb-3" style={{ background: 'var(--bg-card-2)' }}>
           <div

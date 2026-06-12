@@ -22,6 +22,25 @@ export async function generateRecipeFromFridge(imageBase64) {
   return recipes[Math.floor(Math.random() * recipes.length)]
 }
 
+// PHASE 2: POST image to Make.com Scenario B step 1 → Claude Vision returns the
+// list of ingredients it detected in the fridge photo (user can then correct it).
+export async function detectFridgeIngredients(imageBase64) {
+  await sleep(2500)
+  const r = recipes[Math.floor(Math.random() * recipes.length)]
+  // mock: surface the chosen recipe's ingredients as if "detected", plus staples
+  return r.ingredients.slice(0, 5)
+}
+
+// PHASE 2: POST the (corrected) ingredient list to Make.com → Claude builds a
+// recipe from exactly those ingredients. Phase 1 returns a close mock match.
+export async function recipeFromIngredients(ingredients) {
+  await sleep(2000)
+  const joined = (ingredients || []).join(' ')
+  // try to surface a recipe that shares an ingredient keyword; else random
+  const match = recipes.find((r) => r.ingredients.some((ing) => joined.includes(ing.split(' ')[0])))
+  return match || recipes[Math.floor(Math.random() * recipes.length)]
+}
+
 // PHASE 2: replace with Gemini API call via Make.com Scenario E
 // ("Create a personalized weekly workout plan... Return JSON {monday:{...}}")
 // Phase 1: static template generator — picks a preset weekly template by
@@ -55,6 +74,20 @@ export function generateWorkoutPlan({ experience, workouts_per_week, workout_typ
       workout_type,
     }
   })
+}
+
+// Build a single day's workout from a discipline template — used when the user
+// mixes disciplines across the week (e.g. Sun gym, Mon pilates) in My Plan.
+export function workoutForDiscipline(workout_type, experience, variant = 0) {
+  const disc = planTemplates[workout_type] || planTemplates.gym
+  const tmpl = disc[experience] || disc.beginner || planTemplates.gym.beginner
+  const w = tmpl[Math.abs(variant) % tmpl.length]
+  return {
+    workout_name: w.workout_name,
+    muscle_groups: w.muscle_groups,
+    exercises: w.exercises,
+    workout_type,
+  }
 }
 
 // PHASE 2: POST to Make.com webhook for Telegram daily-report registration

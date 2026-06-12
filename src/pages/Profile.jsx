@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Pencil, Save, LogOut, Trash2, Shield, Send, Droplets } from 'lucide-react'
+import { Pencil, Save, LogOut, Trash2, Shield, Send, Droplets, Sun, Moon, SunMoon } from 'lucide-react'
+import { useTheme } from '../context/ThemeContext'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -31,7 +32,7 @@ export default function Profile() {
       <header className="fade-up flex items-center gap-3">
         <div
           className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-black glow-lime"
-          style={{ background: 'var(--lime)', color: '#040404' }}
+          style={{ background: 'var(--lime)', color: 'var(--on-accent)' }}
         >
           {(profile?.nickname || '?')[0]}
         </div>
@@ -302,7 +303,14 @@ function TargetCard({ value, label, color }) {
 
 /* ───────────────────────── Tab 3: Settings ───────────────────────── */
 
+const THEME_OPTIONS = [
+  { key: 'system', label: 'אוטומטי', Icon: SunMoon },
+  { key: 'light', label: 'יום', Icon: Sun },
+  { key: 'dark', label: 'לילה', Icon: Moon },
+]
+
 function SettingsTab({ user, profile, signOut, navigate, showToast, refreshProfile }) {
+  const { mode, setMode } = useTheme()
   const [telegram, setTelegram] = useState(profile?.telegram_id || '')
   const [waterL, setWaterL] = useState(((+profile?.water_target_ml || 2500) / 1000).toFixed(1))
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -344,6 +352,31 @@ function SettingsTab({ user, profile, signOut, navigate, showToast, refreshProfi
 
   return (
     <>
+      <section className="card fade-up fade-up-2">
+        <h2 className="section-title mb-1 flex items-center gap-2">
+          <SunMoon size={17} style={{ color: 'var(--lime)' }} />
+          מראה האפליקציה
+        </h2>
+        <p className="label-muted text-sm mb-3">"אוטומטי" מתאים את עצמו למצב יום/לילה של הטלפון</p>
+        <div className="grid grid-cols-3 gap-2">
+          {THEME_OPTIONS.map(({ key, label, Icon }) => (
+            <button
+              key={key}
+              onClick={() => setMode(key)}
+              className="card-2 p-3 flex flex-col items-center gap-1.5 text-sm font-bold transition-all"
+              style={
+                mode === key
+                  ? { borderColor: 'var(--lime-border)', background: 'var(--lime-dim)', color: 'var(--lime)' }
+                  : { color: 'var(--muted)' }
+              }
+            >
+              <Icon size={18} />
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section className="card fade-up fade-up-2">
         <h2 className="section-title mb-1 flex items-center gap-2">
           <Droplets size={17} style={{ color: 'var(--teal)' }} />

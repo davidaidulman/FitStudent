@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+:root[data-theme='dark'] {
   --bg-body: #040404;
   --bg-page: #0E0E0E;
   --bg-card: #161616;
@@ -17,6 +18,33 @@
   --text: #F0F0F0;
   --muted: #888888;
   --border: rgba(255, 255, 255, 0.06);
+  --on-accent: #040404;
+  --glow: rgba(200, 240, 0, 0.15); /* ambient accent glow, theme-aware */
+}
+
+/* Light theme — clean white + cyan/teal accent (still uses the --lime token
+   name everywhere so no component needs to know which theme is active) */
+:root[data-theme='light'] {
+  --bg-body: #E7EEF5;
+  --bg-page: #F7FAFC;
+  --bg-card: #FFFFFF;
+  --bg-card-2: #EEF4F9;
+  --lime: #0E9FB5;
+  --lime-dim: rgba(14, 159, 181, 0.10);
+  --lime-border: rgba(14, 159, 181, 0.30);
+  --blue: #2563EB;
+  --orange: #EA7317;
+  --purple: #7C5CFC;
+  --teal: #0D9488;
+  --text: #0F2233;
+  --muted: #5B6B7B;
+  --border: rgba(15, 35, 51, 0.10);
+  --on-accent: #FFFFFF;
+  --glow: rgba(14, 159, 181, 0.18);
+}
+
+html {
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 * {
@@ -48,7 +76,7 @@ body {
   transform: translateX(-50%);
   width: 560px;
   height: 320px;
-  background: radial-gradient(circle, rgba(200, 240, 0, 0.06) 0%, transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--lime) 7%, transparent) 0%, transparent 68%);
   pointer-events: none;
   z-index: 0;
   animation: glow-pulse 7s ease-in-out infinite;
@@ -76,14 +104,14 @@ body {
 
   .btn-primary {
     background: var(--lime);
-    color: #040404;
+    color: var(--on-accent);
     font-weight: 800;
     border-radius: 12px;
     padding: 12px 20px;
     width: 100%;
     text-align: center;
     transition: transform 0.1s ease, box-shadow 0.2s ease;
-    box-shadow: 0 0 20px rgba(200, 240, 0, 0.15);
+    box-shadow: 0 0 20px var(--glow);
   }
   .btn-primary:active {
     transform: scale(0.97);
@@ -152,7 +180,7 @@ body {
   }
 
   .glow-lime {
-    box-shadow: 0 0 20px rgba(200, 240, 0, 0.15);
+    box-shadow: 0 0 20px var(--glow);
   }
 }
 
@@ -180,8 +208,8 @@ body {
 }
 
 @keyframes pulse-lime {
-  0%, 100% { box-shadow: 0 0 20px rgba(200, 240, 0, 0.15); }
-  50% { box-shadow: 0 0 42px rgba(200, 240, 0, 0.45); }
+  0%, 100% { box-shadow: 0 0 20px var(--glow); }
+  50% { box-shadow: 0 0 42px color-mix(in srgb, var(--lime) 45%, transparent); }
 }
 .pulse-lime {
   animation: pulse-lime 0.9s ease-in-out 3;
@@ -206,7 +234,7 @@ body {
   font-weight: 600;
   z-index: 100;
   animation: toast-in 0.25s ease both;
-  box-shadow: 0 0 20px rgba(200, 240, 0, 0.15), 0 8px 32px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 20px var(--glow), 0 8px 32px rgba(0, 0, 0, 0.6);
   white-space: nowrap;
 }
 
@@ -265,7 +293,7 @@ input[type='range']::-webkit-slider-thumb {
   border-radius: 50%;
   background: var(--lime);
   cursor: pointer;
-  box-shadow: 0 0 12px rgba(200, 240, 0, 0.4);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--lime) 40%, transparent);
 }
 
 /* hide number input arrows */

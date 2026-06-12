@@ -217,6 +217,16 @@ export const DISCIPLINES = [
 export const DISCIPLINE_LABELS = Object.fromEntries(DISCIPLINES.map((d) => [d.key, d.label]))
 export const DISCIPLINE_EMOJI = Object.fromEntries(DISCIPLINES.map((d) => [d.key, d.emoji]))
 
+// Crossfit workout sections, like a real box programs a session
+export const CROSSFIT_SECTIONS = [
+  { key: 'warmup', label: 'חימום' },
+  { key: 'strength', label: 'כוח' },
+  { key: 'aerobic', label: 'אירובי' },
+  { key: 'metcon', label: 'מטקון (WOD)' },
+  { key: 'finisher', label: 'גמר' },
+]
+export const CROSSFIT_SECTION_LABELS = Object.fromEntries(CROSSFIT_SECTIONS.map((s) => [s.key, s.label]))
+
 // ─────────────────────────────────────────────────────────────
 // Weekly workout-plan templates, keyed by discipline → experience level.
 // Each level is an ordered list of TRAINING days (rest days are filled by
@@ -616,18 +626,19 @@ export const disciplineMovements = [
   { name: 'וול-בול', muscle_group: 'crossfit', sets_recommendation: '4×15', description: 'סקוואט עם זריקת כדור כוח למטרה גבוהה.' },
 ]
 
-// Quick-add common foods (per portion) — one-tap diary logging
+// Quick-add common foods — macros are for the listed portion, whose weight is
+// `grams`. The Log screen lets the user override grams for scale-accurate logging.
 export const COMMON_FOODS = [
-  { name: 'ביצה קשה', emoji: '🥚', portion: 'יחידה', calories: 78, protein_g: 6, carbs_g: 1, fat_g: 5 },
-  { name: 'חזה עוף מבושל', emoji: '🍗', portion: '100 גרם', calories: 165, protein_g: 31, carbs_g: 0, fat_g: 4 },
-  { name: 'אורז לבן מבושל', emoji: '🍚', portion: 'כוס', calories: 205, protein_g: 4, carbs_g: 45, fat_g: 0 },
-  { name: 'שייק חלבון (סקופ)', emoji: '🥤', portion: 'מנה', calories: 120, protein_g: 24, carbs_g: 3, fat_g: 2 },
-  { name: 'יוגורט יווני 5%', emoji: '🥣', portion: 'גביע 200ג', calories: 130, protein_g: 18, carbs_g: 8, fat_g: 5 },
-  { name: 'בננה', emoji: '🍌', portion: 'בינונית', calories: 105, protein_g: 1, carbs_g: 27, fat_g: 0 },
-  { name: 'פרוסת לחם מלא', emoji: '🍞', portion: 'פרוסה', calories: 80, protein_g: 4, carbs_g: 14, fat_g: 1 },
-  { name: 'טונה במים', emoji: '🐟', portion: 'קופסה 140ג', calories: 130, protein_g: 29, carbs_g: 0, fat_g: 1 },
-  { name: 'תפוח', emoji: '🍎', portion: 'בינוני', calories: 95, protein_g: 0, carbs_g: 25, fat_g: 0 },
-  { name: 'חמאת בוטנים', emoji: '🥜', portion: 'כף', calories: 95, protein_g: 4, carbs_g: 3, fat_g: 8 },
+  { name: 'ביצה קשה', emoji: '🥚', portion: 'יחידה', grams: 50, calories: 78, protein_g: 6, carbs_g: 1, fat_g: 5 },
+  { name: 'חזה עוף מבושל', emoji: '🍗', portion: '100 גרם', grams: 100, calories: 165, protein_g: 31, carbs_g: 0, fat_g: 4 },
+  { name: 'אורז לבן מבושל', emoji: '🍚', portion: 'כוס', grams: 160, calories: 205, protein_g: 4, carbs_g: 45, fat_g: 0 },
+  { name: 'שייק חלבון (סקופ)', emoji: '🥤', portion: 'סקופ', grams: 30, calories: 120, protein_g: 24, carbs_g: 3, fat_g: 2 },
+  { name: 'יוגורט יווני 5%', emoji: '🥣', portion: 'גביע', grams: 200, calories: 130, protein_g: 18, carbs_g: 8, fat_g: 5 },
+  { name: 'בננה', emoji: '🍌', portion: 'בינונית', grams: 120, calories: 105, protein_g: 1, carbs_g: 27, fat_g: 0 },
+  { name: 'פרוסת לחם מלא', emoji: '🍞', portion: 'פרוסה', grams: 30, calories: 80, protein_g: 4, carbs_g: 14, fat_g: 1 },
+  { name: 'טונה במים', emoji: '🐟', portion: 'קופסה', grams: 140, calories: 130, protein_g: 29, carbs_g: 0, fat_g: 1 },
+  { name: 'תפוח', emoji: '🍎', portion: 'בינוני', grams: 180, calories: 95, protein_g: 0, carbs_g: 25, fat_g: 0 },
+  { name: 'חמאת בוטנים', emoji: '🥜', portion: 'כף', grams: 16, calories: 95, protein_g: 4, carbs_g: 3, fat_g: 8 },
 ]
 
 // ─────────────────────────────────────────────────────────────
