@@ -45,12 +45,14 @@ async function withFallback(url, payload, mockFn, mockDelay = 800) {
 // PHASE 2 — Make.com Scenario A: Gemini Vision identifies the food, Perplexity
 // verifies the macros. Returns { name, emoji, items, calories, protein_g, ... }.
 export async function analyzeFoodImage(imageBase64) {
-  return withFallback(
-    WEBHOOKS.food,
-    { image_base64: imageBase64 },
-    () => foodResults[Math.floor(Math.random() * foodResults.length)],
-    2000
-  )
+  try {
+    if (!WEBHOOKS.food) throw new Error('no webhook')
+    return await callWebhook(WEBHOOKS.food, { image_base64: imageBase64 })
+  } catch (e) {
+    console.warn('AI food failed, fallback to mock', e)
+    await sleep(800)
+    return foodResults[Math.floor(Math.random() * foodResults.length)]
+  }
 }
 
 // PHASE 2 — Make.com Scenario B (single-shot): image → a full recipe.

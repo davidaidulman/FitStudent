@@ -314,16 +314,25 @@ function LogMealTab({ user, onAdded, showToast }) {
     setAdding(null)
   }
 
-  async function onFile(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setMode('analyzing')
-    const base64 = await imageFileToBase64(file)
-    const mock = await analyzeFoodImage(base64)
-    setPhoto({ result: mock, quantity: 100 })
-    setMode('photo')
-    e.target.value = ''
-  }
+  function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result).split(',')[1]) 
+    r.onerror = reject
+    r.readAsDataURL(file)
+  })
+}
+
+async function onFile(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  setMode('analyzing')
+  const base64Image = await fileToBase64(file);
+  const mock = await analyzeFoodImage(base64Image);
+  setPhoto({ result: mock, quantity: 100 })
+  setMode('photo')
+  e.target.value = ''
+}
 
   function addPhotoToMeal() {
     const { result, quantity } = photo
