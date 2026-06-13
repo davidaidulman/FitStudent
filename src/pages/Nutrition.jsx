@@ -376,7 +376,7 @@ function LogMealTab({ user, onAdded, showToast }) {
       <section className="card fade-up flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <div className="card-2 flex items-center justify-center text-4xl" style={{ width: 64, height: 64 }}>
-            {result.emoji}
+            {result.emoji || '🍽️'}
           </div>
           <div>
             <p className="font-bold">זיהיתי: {result.name}</p>
