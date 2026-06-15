@@ -6,7 +6,7 @@
 // webhook URLs are read from the environment. If a webhook is not configured,
 // or the call fails, we fall back to local mock data so the app never breaks.
 // ─────────────────────────────────────────────────────────────
-import { foodResults, recipes, planTemplates, defaultVariant } from '../data/mockData'
+import { foodResults, recipes, planTemplates, defaultVariant, DISCIPLINE_VARIANT } from '../data/mockData'
 import { DAY_KEYS } from '../utils/dates'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -139,12 +139,35 @@ export async function suggestRecipesFromIngredients(ingredients) {
 // NOTE: callers must `await` this (Onboarding, Workouts).
 export async function generateWorkoutPlan(profile) {
   const { experience, workouts_per_week, workout_type = 'gym', goal, body_type, weight_kg } = profile
-  return withFallback(
+  const res = await withFallback(
     WEBHOOKS.plan,
     { goal, experience, workouts_per_week, workout_type, body_type, weight_kg },
     () => buildLocalPlan({ experience, workouts_per_week, workout_type }),
     1200
   )
+  return normalizePlan(res, { experience, workouts_per_week, workout_type })
+}
+
+// Accept a bare array or { workout_plan | plan | days: [...] } and normalize
+// each day to the shape the app stores. Falls back to the local plan if unusable.
+function normalizePlan(res, fallbackProfile) {
+  const days = Array.isArray(res) ? res : res?.workout_plan || res?.plan || res?.days || []
+  if (!Array.isArray(days) || days.length === 0) return buildLocalPlan(fallbackProfile)
+  return days.map((d) => {
+    const wt = d.workout_type || fallbackProfile.workout_type || 'gym'
+    const validKeys = (DISCIPLINE_VARIANT[wt]?.options || []).map((o) => o.key)
+    const raw = String(d.workout_variant || '').toLowerCase().trim()
+    // keep the variant only if it's a known key, else use the sensible default
+    const variant = validKeys.includes(raw) ? raw : defaultVariant(wt, fallbackProfile.experience)
+    return {
+      day_of_week: d.day_of_week,
+      workout_name: d.workout_name || 'מנוחה',
+      muscle_groups: d.muscle_groups || '',
+      exercises: Array.isArray(d.exercises) ? d.exercises : [],
+      workout_type: wt,
+      workout_variant: variant,
+    }
+  })
 }
 
 // Local static generator — preset weekly template by discipline + level/style,
