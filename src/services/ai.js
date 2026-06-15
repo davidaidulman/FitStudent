@@ -157,13 +157,15 @@ export async function suggestRecipesFromIngredients(ingredients, proteinTargetG 
 // profile. Async. Falls back to the local template generator.
 // NOTE: callers must `await` this (Onboarding, Workouts).
 export async function generateWorkoutPlan(profile) {
-  const { experience, workouts_per_week, workout_type = 'gym', goal, body_type, weight_kg } = profile
-  return withFallback(
+  const result = await withFallback(
     WEBHOOKS.plan,
-    { goal, experience, workouts_per_week, workout_type, body_type, weight_kg },
-    () => buildLocalPlan({ experience, workouts_per_week, workout_type }),
-    1200
-  )
+    profile, // שולח את כל נתוני הפרופיל (מטרה, ניסיון וכו')
+    () => workoutPlans.beginner, // הגיבוי למקרה של נפילה
+    6000 // נותנים ל-AI קצת יותר זמן לבנות תוכנית שלמה
+  );
+  
+  // מחלצים את מערך 7 הימים מהאובייקט ש-OpenAI מחזיר
+  return result.workout_plan ? result.workout_plan : result;
 }
 
 // Local static generator — preset weekly template by discipline + level/style,

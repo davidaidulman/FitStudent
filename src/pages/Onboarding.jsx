@@ -125,7 +125,21 @@ export default function Onboarding() {
       setBusy(false)
     }
   }
-
+// מסך הטעינה שיוצג בזמן שה-AI בונה את התוכנית
+  if (busy) {
+    return (
+      <div className="min-h-dvh px-5 py-8 flex flex-col items-center justify-center text-center max-w-md mx-auto fade-up">
+        <div className="text-7xl mb-6 animate-pulse" style={{ animationDuration: '1.5s' }}>🧠</div>
+        <h2 className="text-3xl font-black mb-3">ה-AI בפעולה...</h2>
+        <p className="label-muted text-lg mb-8 leading-relaxed">
+          אנחנו מנתחים את הנתונים שלך, מחשבים את המאקרוס, ומרכיבים עבורך תוכנית אימונים מותאמת אישית.
+          <br /><br />
+          <span style={{ color: 'var(--lime)' }}>זה ייקח בערך 10-15 שניות, שווה לחכות! 🚀</span>
+        </p>
+      </div>
+    )
+  }
+    <div className="min-h-dvh px-5 py-8 relative z-10 max-w-md mx-auto"></div>
   return (
     <div className="min-h-dvh px-5 py-8 relative z-10 max-w-md mx-auto">
       {/* progress header */}
