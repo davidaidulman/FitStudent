@@ -228,31 +228,19 @@ export function workoutForDiscipline(workout_type, variant, index = 0) {
   }
 }
 
-// PHASE 2 — Make.com: add a chosen day's workout to the user's Google Calendar.
-// Sends a self-describing payload; returns true on success, false otherwise.
-// Never throws — the UI shows a toast based on the boolean.
-export async function addWorkoutToCalendar(workout) {
-  if (!WEBHOOKS.calendar) return false
-  try {
-    const exercises = Array.isArray(workout.exercises) ? workout.exercises : []
-    const description = exercises
-      .map((e) => `${e.name}${e.sets ? ` ${e.sets}x${e.reps}` : ''}${e.weight_kg ? ` ${e.weight_kg}kg` : ''}`)
-      .join(', ')
-    await callWebhook(WEBHOOKS.calendar, {
-      title: `אימון: ${workout.workout_name}`,
-      workout_name: workout.workout_name,
-      workout_type: workout.workout_type || 'gym',
-      muscle_groups: workout.muscle_groups || '',
-      date: workout.date,
-      duration_min: workout.duration_min || Math.max(exercises.length * 9, 30),
-      description,
-      exercises,
-    })
-    return true
-  } catch (e) {
-    console.warn('[ai] calendar webhook failed:', e?.message)
-    return false
-  }
+// PHASE 2 — Make.com: schedule a workout to Google Calendar
+export async function scheduleWorkoutToCalendar(workoutName, userEmail, startTimeIso) {
+  if (!WEBHOOKS.calendar) throw new Error('No calendar webhook defined');
+
+  const startTime = new Date(startTimeIso);
+  const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // אימון של שעה
+
+  return await callWebhook(WEBHOOKS.calendar, {
+    workout_name: workoutName,
+    user_email: userEmail,
+    start_time: startTime.toISOString(),
+    end_time: endTime.toISOString()
+  });
 }
 
 // PHASE 2: POST to Make.com webhook for Telegram daily-report registration
