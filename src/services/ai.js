@@ -17,6 +17,7 @@ const WEBHOOKS = {
   fridgeDetect: import.meta.env.VITE_MAKE_WEBHOOK_FRIDGE_DETECT,
   fridgeRecipe: import.meta.env.VITE_MAKE_WEBHOOK_FRIDGE_RECIPE,
   plan: import.meta.env.VITE_MAKE_WEBHOOK_PLAN,
+  calendar: import.meta.env.VITE_MAKE_WEBHOOK_CALENDAR,
 }
 
 async function callWebhook(url, payload) {
@@ -224,6 +225,33 @@ export function workoutForDiscipline(workout_type, variant, index = 0) {
     exercises: w.exercises,
     workout_type,
     workout_variant: variant,
+  }
+}
+
+// PHASE 2 — Make.com: add a chosen day's workout to the user's Google Calendar.
+// Sends a self-describing payload; returns true on success, false otherwise.
+// Never throws — the UI shows a toast based on the boolean.
+export async function addWorkoutToCalendar(workout) {
+  if (!WEBHOOKS.calendar) return false
+  try {
+    const exercises = Array.isArray(workout.exercises) ? workout.exercises : []
+    const description = exercises
+      .map((e) => `${e.name}${e.sets ? ` ${e.sets}x${e.reps}` : ''}${e.weight_kg ? ` ${e.weight_kg}kg` : ''}`)
+      .join(', ')
+    await callWebhook(WEBHOOKS.calendar, {
+      title: `אימון: ${workout.workout_name}`,
+      workout_name: workout.workout_name,
+      workout_type: workout.workout_type || 'gym',
+      muscle_groups: workout.muscle_groups || '',
+      date: workout.date,
+      duration_min: workout.duration_min || Math.max(exercises.length * 9, 30),
+      description,
+      exercises,
+    })
+    return true
+  } catch (e) {
+    console.warn('[ai] calendar webhook failed:', e?.message)
+    return false
   }
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Timer, CheckCircle2, Dumbbell, X, Plus, Trash2, Pencil, Flame, RefreshCw } from 'lucide-react'
+import { Timer, CheckCircle2, Dumbbell, X, Plus, Trash2, Pencil, Flame, RefreshCw, CalendarPlus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
@@ -18,9 +18,19 @@ import {
   variantLabel,
   defaultVariant,
 } from '../data/mockData'
-import { generateWorkoutPlan, workoutForDiscipline, recommendationsFor } from '../services/ai'
+import { generateWorkoutPlan, workoutForDiscipline, recommendationsFor, addWorkoutToCalendar } from '../services/ai'
 import { calcCaloriesBurned } from '../utils/nutrition'
 import { todayKey, todayISO, DAY_KEYS, DAY_LETTERS_HE, hebrewShortDate } from '../utils/dates'
+
+// next calendar date (YYYY-MM-DD) for a given day_of_week key (today if it matches)
+function upcomingISO(dayKey) {
+  const idx = DAY_KEYS.indexOf(dayKey)
+  if (idx < 0) return todayISO()
+  const now = new Date()
+  const d = new Date(now)
+  d.setDate(now.getDate() + ((idx - now.getDay() + 7) % 7))
+  return d.toISOString().slice(0, 10)
+}
 
 const TABS = [
   { key: 'plan', label: 'התוכנית שלי' },
@@ -330,6 +340,21 @@ function PlanTab({ plan, user, profile, reloadPlan, refreshProfile, showToast })
   const [switching, setSwitching] = useState(null)
   const [editDay, setEditDay] = useState(null) // day_of_week being edited
   const [savingDay, setSavingDay] = useState(false)
+  const [calBusy, setCalBusy] = useState(null) // day being added to calendar
+
+  // add a chosen day's workout to Google Calendar (date = next occurrence)
+  async function addDayToCalendar(day, entry) {
+    setCalBusy(day)
+    const ok = await addWorkoutToCalendar({
+      workout_name: entry.workout_name,
+      workout_type: entry.workout_type,
+      muscle_groups: entry.muscle_groups,
+      exercises: entry.exercises_json || [],
+      date: upcomingISO(day),
+    })
+    setCalBusy(null)
+    showToast(ok ? 'נוסף ליומן Google 📅' : 'שגיאה בהוספה ליומן 😕')
+  }
 
   // save one day's edited workout (from WorkoutEditor) -enables a mixed,
   // fully-customisable week while still starting from the recommendation
@@ -478,6 +503,17 @@ function PlanTab({ plan, user, profile, reloadPlan, refreshProfile, showToast })
                   היום
                 </span>
               )}
+              {!isRest && (
+                <button
+                  onClick={() => addDayToCalendar(day, entry)}
+                  aria-label="הוסף ליומן Google"
+                  disabled={calBusy === day}
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: 'var(--bg-card-2)', border: '1px solid var(--border)' }}
+                >
+                  <CalendarPlus size={14} style={{ color: calBusy === day ? 'var(--lime)' : 'var(--muted)' }} />
+                </button>
+              )}
               <button
                 onClick={() => setEditDay(day)}
                 aria-label="ערוך יום"
@@ -509,6 +545,7 @@ function TodayTab({ plan, user, profile, reloadPlan, showToast }) {
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(false)
   const [savingPlan, setSavingPlan] = useState(false)
+  const [addingCal, setAddingCal] = useState(false)
   const startTime = useRef(Date.now())
 
   // edit today's planned workout in-place (same editor as My Plan)
@@ -688,9 +725,30 @@ function TodayTab({ plan, user, profile, reloadPlan, showToast }) {
           ))}
         </div>
 
-        <button className="btn-primary mt-4" onClick={completeWorkout} disabled={saving || completed}>
-          {completed ? '✅ האימון הושלם!' : saving ? 'שומר...' : '🏁 סיום אימון'}
-        </button>
+        <div className="flex gap-2 mt-4">
+          <button className="btn-primary" onClick={completeWorkout} disabled={saving || completed}>
+            {completed ? '✅ האימון הושלם!' : saving ? 'שומר...' : '🏁 סיום אימון'}
+          </button>
+          <button
+            className="btn-ghost !w-auto px-4 flex items-center justify-center gap-1.5"
+            style={{ color: 'var(--lime)', borderColor: 'var(--lime-border)' }}
+            disabled={addingCal}
+            onClick={async () => {
+              setAddingCal(true)
+              const ok = await addWorkoutToCalendar({
+                workout_name: todayPlan.workout_name,
+                workout_type: todayPlan.workout_type,
+                muscle_groups: todayPlan.muscle_groups,
+                exercises,
+                date: todayISO(),
+              })
+              setAddingCal(false)
+              showToast(ok ? 'נוסף ליומן Google 📅' : 'שגיאה בהוספה ליומן 😕')
+            }}
+          >
+            <CalendarPlus size={16} /> ליומן
+          </button>
+        </div>
       </section>
     </>
   )
