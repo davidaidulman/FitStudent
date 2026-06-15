@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Timer, CheckCircle2, Dumbbell, X, Plus, Trash2, Pencil, Flame, RefreshCw, CalendarPlus } from 'lucide-react'
+import { Timer, CheckCircle2, Dumbbell, X, Plus, Trash2, Pencil, Flame, RefreshCw, Calendar } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
@@ -18,19 +18,9 @@ import {
   variantLabel,
   defaultVariant,
 } from '../data/mockData'
-import { generateWorkoutPlan, workoutForDiscipline, recommendationsFor, addWorkoutToCalendar } from '../services/ai'
+import { generateWorkoutPlan, workoutForDiscipline, recommendationsFor, scheduleWorkoutToCalendar } from '../services/ai'
 import { calcCaloriesBurned } from '../utils/nutrition'
 import { todayKey, todayISO, DAY_KEYS, DAY_LETTERS_HE, hebrewShortDate } from '../utils/dates'
-
-// next calendar date (YYYY-MM-DD) for a given day_of_week key (today if it matches)
-function upcomingISO(dayKey) {
-  const idx = DAY_KEYS.indexOf(dayKey)
-  if (idx < 0) return todayISO()
-  const now = new Date()
-  const d = new Date(now)
-  d.setDate(now.getDate() + ((idx - now.getDay() + 7) % 7))
-  return d.toISOString().slice(0, 10)
-}
 
 const TABS = [
   { key: 'plan', label: 'התוכנית שלי' },
@@ -92,8 +82,6 @@ function normEx(ex) {
   }
 }
 
-// Editor for a single workout -used to tweak a planned day (future) or a past
-// logged workout. Starts from the recommendation but every field is editable.
 function WorkoutEditor({ initial, mode, profile, onSave, onClose, busy }) {
   const startRest = initial.workout_name === 'מנוחה' || (!initial.workout_name && (initial.exercises_json || initial.exercises || []).length === 0 && mode === 'plan' && initial.isRest)
   const [rest, setRest] = useState(initial.workout_name === 'מנוחה')
@@ -170,7 +158,6 @@ function WorkoutEditor({ initial, mode, profile, onSave, onClose, busy }) {
         </button>
       </div>
 
-      {/* rest toggle (plan only) */}
       {mode === 'plan' && (
         <button
           onClick={() => setRest((r) => !r)}
@@ -338,26 +325,9 @@ function PlanTab({ plan, user, profile, reloadPlan, refreshProfile, showToast })
   const byDay = Object.fromEntries(plan.map((p) => [p.day_of_week, p]))
   const current = profile?.workout_type || 'gym'
   const [switching, setSwitching] = useState(null)
-  const [editDay, setEditDay] = useState(null) // day_of_week being edited
+  const [editDay, setEditDay] = useState(null)
   const [savingDay, setSavingDay] = useState(false)
-  const [calBusy, setCalBusy] = useState(null) // day being added to calendar
 
-  // add a chosen day's workout to Google Calendar (date = next occurrence)
-  async function addDayToCalendar(day, entry) {
-    setCalBusy(day)
-    const ok = await addWorkoutToCalendar({
-      workout_name: entry.workout_name,
-      workout_type: entry.workout_type,
-      muscle_groups: entry.muscle_groups,
-      exercises: entry.exercises_json || [],
-      date: upcomingISO(day),
-    })
-    setCalBusy(null)
-    showToast(ok ? 'נוסף ליומן Google 📅' : 'שגיאה בהוספה ליומן 😕')
-  }
-
-  // save one day's edited workout (from WorkoutEditor) -enables a mixed,
-  // fully-customisable week while still starting from the recommendation
   async function saveDay(day, data) {
     setSavingDay(true)
     const row = data.rest
@@ -383,7 +353,6 @@ function PlanTab({ plan, user, profile, reloadPlan, refreshProfile, showToast })
   async function switchDiscipline(discipline) {
     if (discipline === current || switching) return
     setSwitching(discipline)
-    // regenerate the weekly plan for the new discipline; history (workout_log) is untouched
     const newPlan = await generateWorkoutPlan({
       experience: profile?.experience,
       workouts_per_week: profile?.workouts_per_week,
@@ -503,17 +472,6 @@ function PlanTab({ plan, user, profile, reloadPlan, refreshProfile, showToast })
                   היום
                 </span>
               )}
-              {!isRest && (
-                <button
-                  onClick={() => addDayToCalendar(day, entry)}
-                  aria-label="הוסף ליומן Google"
-                  disabled={calBusy === day}
-                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: 'var(--bg-card-2)', border: '1px solid var(--border)' }}
-                >
-                  <CalendarPlus size={14} style={{ color: calBusy === day ? 'var(--lime)' : 'var(--muted)' }} />
-                </button>
-              )}
               <button
                 onClick={() => setEditDay(day)}
                 aria-label="ערוך יום"
@@ -538,17 +496,16 @@ function TodayTab({ plan, user, profile, reloadPlan, showToast }) {
   const isRest = !todayPlan || todayPlan.workout_name === 'מנוחה' || exercises.length === 0
 
   const [actualWeights, setActualWeights] = useState({})
-  const [timerFor, setTimerFor] = useState(null) // exercise index with active rest timer
-  const [restSeconds, setRestSeconds] = useState(60) // configurable rest duration
+  const [timerFor, setTimerFor] = useState(null)
+  const [restSeconds, setRestSeconds] = useState(60)
   const [celebrating, setCelebrating] = useState(false)
   const [completed, setCompleted] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(false)
   const [savingPlan, setSavingPlan] = useState(false)
-  const [addingCal, setAddingCal] = useState(false)
+  const [scheduling, setScheduling] = useState(false)
   const startTime = useRef(Date.now())
 
-  // edit today's planned workout in-place (same editor as My Plan)
   async function saveTodayPlan(data) {
     setSavingPlan(true)
     const day = todayKey()
@@ -570,19 +527,6 @@ function TodayTab({ plan, user, profile, reloadPlan, showToast }) {
     if (error) return showToast('שגיאה בעדכון 😕')
     showToast('האימון של היום עודכן ✅')
     reloadPlan()
-  }
-
-  if (editing) {
-    return (
-      <WorkoutEditor
-        mode="plan"
-        profile={profile}
-        busy={savingPlan}
-        initial={todayPlan || { workout_name: '', workout_type: profile?.workout_type || 'gym', exercises_json: [] }}
-        onSave={saveTodayPlan}
-        onClose={() => setEditing(false)}
-      />
-    )
   }
 
   async function completeWorkout() {
@@ -618,6 +562,43 @@ function TodayTab({ plan, user, profile, reloadPlan, showToast }) {
     setTimeout(() => setCelebrating(false), 4000)
   }
 
+  async function handleSchedule() {
+    const time = prompt("באיזו שעה לקבוע את האימון? (למשל: 15:30)", "17:00");
+    if (!time) return;
+
+    setScheduling(true);
+    try {
+      const [hours, minutes] = time.split(':');
+      const scheduledDate = new Date();
+      scheduledDate.setHours(parseInt(hours), parseInt(minutes), 0, 0); 
+      
+      await scheduleWorkoutToCalendar(
+        todayPlan.workout_name,
+        user.email,
+        scheduledDate.toISOString()
+      );
+      showToast(`האימון נקבע ל-${time}! 📅`);
+    } catch (err) {
+      console.error(err);
+      showToast('שגיאה בהוספה ליומן');
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <WorkoutEditor
+        mode="plan"
+        profile={profile}
+        busy={savingPlan}
+        initial={todayPlan || { workout_name: '', workout_type: profile?.workout_type || 'gym', exercises_json: [] }}
+        onSave={saveTodayPlan}
+        onClose={() => setEditing(false)}
+      />
+    )
+  }
+
   if (isRest) {
     return (
       <section className="card fade-up fade-up-2 text-center py-10">
@@ -645,6 +626,15 @@ function TodayTab({ plan, user, profile, reloadPlan, showToast }) {
             {todayPlan.workout_name}
           </h2>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleSchedule}
+              disabled={scheduling}
+              aria-label="קבע ביומן"
+              className="w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ background: 'var(--lime-dim)', border: '1px solid var(--lime-border)' }}
+            >
+              <Calendar size={14} style={{ color: 'var(--lime)' }} />
+            </button>
             {completed && <CheckCircle2 size={20} style={{ color: 'var(--lime)' }} />}
             <button
               onClick={() => setEditing(true)}
@@ -725,30 +715,9 @@ function TodayTab({ plan, user, profile, reloadPlan, showToast }) {
           ))}
         </div>
 
-        <div className="flex gap-2 mt-4">
-          <button className="btn-primary" onClick={completeWorkout} disabled={saving || completed}>
-            {completed ? '✅ האימון הושלם!' : saving ? 'שומר...' : '🏁 סיום אימון'}
-          </button>
-          <button
-            className="btn-ghost !w-auto px-4 flex items-center justify-center gap-1.5"
-            style={{ color: 'var(--lime)', borderColor: 'var(--lime-border)' }}
-            disabled={addingCal}
-            onClick={async () => {
-              setAddingCal(true)
-              const ok = await addWorkoutToCalendar({
-                workout_name: todayPlan.workout_name,
-                workout_type: todayPlan.workout_type,
-                muscle_groups: todayPlan.muscle_groups,
-                exercises,
-                date: todayISO(),
-              })
-              setAddingCal(false)
-              showToast(ok ? 'נוסף ליומן Google 📅' : 'שגיאה בהוספה ליומן 😕')
-            }}
-          >
-            <CalendarPlus size={16} /> ליומן
-          </button>
-        </div>
+        <button className="btn-primary mt-4" onClick={completeWorkout} disabled={saving || completed}>
+          {completed ? '✅ האימון הושלם!' : saving ? 'שומר...' : '🏁 סיום אימון'}
+        </button>
       </section>
     </>
   )
@@ -805,7 +774,6 @@ function RestTimer({ seconds = 60, onDone }) {
   )
 }
 
-// short completion beep via Web Audio API
 function beep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()
@@ -819,7 +787,6 @@ function beep() {
     osc.start()
     osc.stop(ctx.currentTime + 0.5)
   } catch {
-    // audio not available -silent fallback
   }
 }
 
@@ -835,7 +802,7 @@ function AddWorkoutTab({ user, profile, showToast, onAdded }) {
 
   const isGym = type === 'gym'
   const isCrossfit = type === 'crossfit'
-  const showExercises = isGym || isCrossfit // both record sets/reps/weight
+  const showExercises = isGym || isCrossfit 
   const variantOpts = DISCIPLINE_VARIANT[type]?.options || []
   const calories = calcCaloriesBurned({ workout_type: type, variant, duration_min: duration, weight_kg: profile?.weight_kg })
 
@@ -1031,7 +998,7 @@ function NumField({ label, value, onChange }) {
 
 function HistoryTab({ user, profile, showToast }) {
   const [logs, setLogs] = useState(null)
-  const [editing, setEditing] = useState(null) // log row being edited
+  const [editing, setEditing] = useState(null) 
   const [busy, setBusy] = useState(false)
 
   async function load() {
@@ -1133,9 +1100,8 @@ function HistoryTab({ user, profile, showToast }) {
 
 function LibraryTab({ profile }) {
   const [discipline, setDiscipline] = useState(profile?.workout_type || 'gym')
-  const [muscle, setMuscle] = useState('all') // gym-only sub-filter
+  const [muscle, setMuscle] = useState('all') 
 
-  // gym uses the muscle-group library; other disciplines use disciplineMovements
   const isGym = discipline === 'gym'
   const pool = isGym ? exerciseLibrary : disciplineMovements.filter((m) => m.muscle_group === discipline)
   const list = isGym && muscle !== 'all' ? pool.filter((e) => e.muscle_group === muscle) : pool
